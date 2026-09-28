@@ -1,0 +1,15 @@
+{
+  "name": "ai-usage-cost-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Usage Cost Tracker - TypeScript, Express, Prisma, PostgreSQL, React, Vite, Tailwind CSS, Recharts",
+  "scripts": {
+    "dev": "npm run dev --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build": "npm run build:server && npm run build:client",
+    "start": "npm run start --prefix server"
+  }
+}

@@ -1,0 +1,50 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Customer {
+  id           String        @id @default(uuid())
+  customerId   String        @unique @map("customer_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  usageRecords UsageRecord[]
+
+  @@map("customers")
+}
+
+model UsageRecord {
+  id           String    @id @default(uuid())
+  customerId   String    @map("customer_id")
+  customer     Customer  @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  timestamp    DateTime?
+  modelName    String    @map("model_name")
+  inputTokens  Int       @map("input_tokens")
+  outputTokens Int       @map("output_tokens")
+  totalTokens  Int       @map("total_tokens")
+  inputCost    Float     @map("input_cost")
+  outputCost   Float     @map("output_cost")
+  totalCost    Float     @map("total_cost")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([customerId])
+  @@index([modelName])
+  @@map("usage_records")
+}
+
+model ModelPricing {
+  id              String   @id @default(uuid())
+  modelName       String   @unique @map("model_name")
+  displayName     String   @map("display_name")
+  provider        String
+  costPer1kInput  Float    @map("cost_per_1k_input")
+  costPer1kOutput Float    @map("cost_per_1k_output")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("model_pricing")
+}
