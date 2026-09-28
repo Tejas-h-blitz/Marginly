@@ -12,6 +12,8 @@ client/.env
 
 # Local Embedded Database Data
 dev-postgres-data/
+server/dev-pg-data/
+**/dev-pg-data/**
 *.sqlite
 *.sqlite3
 *.db
@@ -33,3 +35,6 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Keep README local only
+README.md
