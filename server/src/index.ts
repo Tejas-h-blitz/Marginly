@@ -21,6 +21,13 @@ app.use(cors({
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+// Clerk Authentication Middleware (if secret key configured)
+import { clerkMiddleware } from '@clerk/express';
+if (process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY.trim().startsWith('sk_')) {
+  app.use(clerkMiddleware());
+  console.log('[Auth] Clerk middleware enabled with CLERK_SECRET_KEY.');
+}
+
 // API Routes
 app.use('/api', apiRouter);
 

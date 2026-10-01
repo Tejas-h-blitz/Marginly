@@ -1,17 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Navbar } from './components/Navbar';
-import { KpiGrid } from './components/KpiGrid';
-import { ImportSection } from './components/ImportSection';
-import { CostChart } from './components/CostChart';
-import { CustomerTable } from './components/CustomerTable';
-import { PricingModal } from './components/PricingModal';
+import { AuthProvider, useAuth } from './context/AuthContext.js';
+import { ClerkProviderWrapper } from './context/ClerkProviderWrapper.js';
+import { LandingPage } from './components/landing/LandingPage.js';
+import { AuthModal } from './components/auth/AuthModal.js';
+import { AppNavbar } from './components/app/AppNavbar.js';
+import { ConcentrationBanner } from './components/app/ConcentrationBanner.js';
+import { ImportDrawer } from './components/app/ImportDrawer.js';
+import { KpiGrid } from './components/KpiGrid.js';
+import { CostChart } from './components/CostChart.js';
+import { CustomerTable } from './components/CustomerTable.js';
+import { PricingModal } from './components/PricingModal.js';
 import {
   CustomerBreakdown,
   UsageSummary,
   ModelPricingItem,
   PricingResponse,
   AlertNotification
-} from './types';
+} from './types/index.js';
 
 const INITIAL_SUMMARY: UsageSummary = {
   totalCustomers: 0,
@@ -23,12 +28,17 @@ const INITIAL_SUMMARY: UsageSummary = {
   topCustomer: null
 };
 
-export function App() {
+function MainAppContent() {
+  const { isAuthenticated } = useAuth();
+  const [currentView, setCurrentView] = useState<'landing' | 'app'>('landing');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
+
   const [summary, setSummary] = useState<UsageSummary>(INITIAL_SUMMARY);
   const [customers, setCustomers] = useState<CustomerBreakdown[]>([]);
   const [pricing, setPricing] = useState<Record<string, ModelPricingItem> | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [isPricingOpen, setIsPricingOpen] = useState<boolean>(false);
   const [alert, setAlert] = useState<AlertNotification | null>(null);
 
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -75,7 +85,7 @@ export function App() {
 
   const handleLoadSample = async () => {
     setLoading(true);
-    showAlert('Loading sample usage data across 8 accounts...', 'info');
+    showAlert('Loading sample usage logs...', 'info');
     try {
       const res = await fetch('/api/load-sample', { method: 'POST' });
       const data = await res.json();
@@ -155,35 +165,153 @@ export function App() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-20">
-      <Navbar
-        onLoadSample={handleLoadSample}
-        onExportCsv={handleExportCsv}
-        onOpenPricing={() => setIsPricingOpen(true)}
-        onClearData={handleClearData}
-        loading={loading}
+    <>
+      {currentView === 'landing' ? (
+        <LandingPage
+          onLaunchApp={() => setCurrentView('app')}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          isAuthenticated={isAuthenticated}
+        />
+      ) : (
+        <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans">
+          {/* Top Application Navbar */}
+          <AppNavbar
+            onOpenImport={() => setIsImportOpen(true)}
+            onOpenPricing={() => setIsPricingOpen(true)}
+            onClearData={handleClearData}
+            onBackToLanding={() => setCurrentView('landing')}
+            totalCustomers={summary.totalCustomers}
+          />
+
+          {/* Main Dashboard Content */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 pb-24 space-y-6">
+            
+            {/* Action Bar */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/60 border border-white/[0.08] p-4 rounded-2xl">
+              <div>
+                <h1 className="text-xl font-extrabold text-white flex items-center gap-2">
+                  <span>Customer Cost &amp; Margin Intelligence</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Live
+                  </span>
+                </h1>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Track per-account LLM expenditure, identify power users, and preserve gross margins.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => setIsImportOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 transition-all"
+                >
+                  <svg className="w-3.5 h-3.5 stroke-slate-950 fill-none stroke-2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Import Logs</span>
+                </button>
+
+                {summary.totalCustomers === 0 && (
+                  <button
+                    onClick={handleLoadSample}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 transition-all"
+                  >
+                    <span>Load Demo Data</span>
+                  </button>
+                )}
+
+                {summary.totalCustomers > 0 && (
+                  <button
+                    onClick={handleExportCsv}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold transition-all"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Export CSV</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Pareto 80/20 Concentration Risk Alert */}
+            <ConcentrationBanner
+              customers={customers}
+              totalCost={summary.totalCost}
+            />
+
+            {/* KPI Cards */}
+            <KpiGrid summary={summary} />
+
+            {/* Recharts Customer Spend Distribution */}
+            <CostChart customers={customers} />
+
+            {/* Customer Table with Sorting and Filter Pills */}
+            <CustomerTable customers={customers} />
+          </main>
+
+          {/* Ingestion Slide-out Drawer */}
+          <ImportDrawer
+            isOpen={isImportOpen}
+            onClose={() => setIsImportOpen(false)}
+            onUploadFile={handleUploadFile}
+            onPasteSubmit={handlePasteSubmit}
+            onLoadSample={handleLoadSample}
+            alert={alert}
+            onDismissAlert={() => setAlert(null)}
+            loading={loading}
+          />
+
+          {/* Model Pricing Reference Modal */}
+          <PricingModal
+            isOpen={isPricingOpen}
+            onClose={() => setIsPricingOpen(false)}
+            pricing={pricing}
+          />
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => setCurrentView('app')}
       />
 
-      <KpiGrid summary={summary} />
+      {/* Floating Notification Toast */}
+      {alert && (
+        <div className="fixed bottom-5 right-5 z-50 animate-fadeIn">
+          <div
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-medium backdrop-blur-xl ${
+              alert.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+                : alert.type === 'error'
+                ? 'bg-rose-950/90 border-rose-500/50 text-rose-200'
+                : 'bg-slate-900/90 border-white/20 text-slate-200'
+            }`}
+          >
+            <span>{alert.message}</span>
+            <button
+              onClick={() => setAlert(null)}
+              className="text-slate-400 hover:text-white p-0.5"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
-      <ImportSection
-        onUploadFile={handleUploadFile}
-        onPasteSubmit={handlePasteSubmit}
-        alert={alert}
-        onDismissAlert={() => setAlert(null)}
-        loading={loading}
-      />
-
-      <CostChart customers={customers} />
-
-      <CustomerTable customers={customers} />
-
-      <PricingModal
-        isOpen={isPricingOpen}
-        onClose={() => setIsPricingOpen(false)}
-        pricing={pricing}
-      />
-    </div>
+export function App() {
+  return (
+    <ClerkProviderWrapper>
+      <AuthProvider>
+        <MainAppContent />
+      </AuthProvider>
+    </ClerkProviderWrapper>
   );
 }
 

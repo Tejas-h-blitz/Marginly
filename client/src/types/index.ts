@@ -39,3 +39,18 @@ export interface AlertNotification {
   message: string;
   type: 'success' | 'error' | 'info';
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatarUrl?: string;
+  companyName: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  tier: 'Free' | 'Pro' | 'Enterprise';
+}
