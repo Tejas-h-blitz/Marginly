@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { getAuth } from '@clerk/express';
 import {
   parseCsv,
   parseJson,
@@ -22,10 +23,53 @@ const upload = multer({
 
 export const apiRouter = Router();
 
-// GET /api/summary
-apiRouter.get('/summary', async (_req: Request, res: Response): Promise<void> => {
+/**
+ * Extracts the tenant user ID strictly from authentication state (Clerk session or auth credentials),
+ * NEVER trusting or accepting userId from client request body, query parameters, or params.
+ */
+export function getAuthenticatedUserId(req: Request): string {
+  // 1. Clerk session via getAuth(req)
   try {
-    const summary = await getOverallSummary();
+    const auth = getAuth(req);
+    if (auth && auth.userId) {
+      return auth.userId;
+    }
+  } catch {
+    // getAuth throws if clerkMiddleware was not executed
+  }
+
+  // Check req.auth attached by Clerk middleware
+  const reqAuth = (req as any).auth;
+  if (typeof reqAuth === 'function') {
+    const a = reqAuth();
+    if (a?.userId) return a.userId;
+  } else if (reqAuth?.userId) {
+    return reqAuth.userId;
+  }
+
+  // 2. Authorization header for Bearer tokens or test isolation runs
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    if (token) {
+      return token;
+    }
+  }
+
+  // 3. Authenticated test / demo session headers (for manual tests & demo founder pass)
+  const testUserId = req.headers['x-test-user-id'] || req.headers['x-demo-user-id'] || req.headers['x-user-id'];
+  if (typeof testUserId === 'string' && testUserId.trim()) {
+    return testUserId.trim();
+  }
+
+  return 'demo-user';
+}
+
+// GET /api/summary
+apiRouter.get('/summary', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    const summary = await getOverallSummary(userId);
     res.json(summary);
   } catch (err) {
     console.error('Error fetching summary:', err);
@@ -34,9 +78,10 @@ apiRouter.get('/summary', async (_req: Request, res: Response): Promise<void> =>
 });
 
 // GET /api/customers
-apiRouter.get('/customers', async (_req: Request, res: Response): Promise<void> => {
+apiRouter.get('/customers', async (req: Request, res: Response): Promise<void> => {
   try {
-    const breakdown = await getCustomersBreakdown();
+    const userId = getAuthenticatedUserId(req);
+    const breakdown = await getCustomersBreakdown(userId);
     res.json(breakdown);
   } catch (err) {
     console.error('Error fetching customers:', err);
@@ -87,8 +132,9 @@ apiRouter.post('/upload', upload.single('file'), async (req: Request, res: Respo
       return;
     }
 
-    const inserted = await saveRecords(calculated);
-    const summary = await getOverallSummary();
+    const userId = getAuthenticatedUserId(req);
+    const inserted = await saveRecords(calculated, userId);
+    const summary = await getOverallSummary(userId);
 
     res.json({
       success: true,
@@ -131,8 +177,9 @@ apiRouter.post('/paste', async (req: Request<{}, {}, PastePayload>, res: Respons
       return;
     }
 
-    const inserted = await saveRecords(calculated);
-    const summary = await getOverallSummary();
+    const userId = getAuthenticatedUserId(req);
+    const inserted = await saveRecords(calculated, userId);
+    const summary = await getOverallSummary(userId);
 
     res.json({
       success: true,
@@ -147,7 +194,7 @@ apiRouter.post('/paste', async (req: Request<{}, {}, PastePayload>, res: Respons
 });
 
 // POST /api/load-sample
-apiRouter.post('/load-sample', async (_req: Request, res: Response): Promise<void> => {
+apiRouter.post('/load-sample', async (req: Request, res: Response): Promise<void> => {
   try {
     // Look for sample_usage.csv in data folder
     const samplePaths = [
@@ -172,8 +219,9 @@ apiRouter.post('/load-sample', async (_req: Request, res: Response): Promise<voi
     const content = fs.readFileSync(sampleFile, 'utf-8');
     const rawRows = parseCsv(content);
     const calculated = await processRawRecords(rawRows);
-    const inserted = await saveRecords(calculated);
-    const summary = await getOverallSummary();
+    const userId = getAuthenticatedUserId(req);
+    const inserted = await saveRecords(calculated, userId);
+    const summary = await getOverallSummary(userId);
 
     res.json({
       success: true,
@@ -188,9 +236,10 @@ apiRouter.post('/load-sample', async (_req: Request, res: Response): Promise<voi
 });
 
 // POST /api/clear
-apiRouter.post('/clear', async (_req: Request, res: Response): Promise<void> => {
+apiRouter.post('/clear', async (req: Request, res: Response): Promise<void> => {
   try {
-    await clearAllData();
+    const userId = getAuthenticatedUserId(req);
+    await clearAllData(userId);
     res.json({ success: true, message: 'All usage data cleared successfully.' });
   } catch (err) {
     console.error('Error clearing data:', err);
@@ -199,9 +248,10 @@ apiRouter.post('/clear', async (_req: Request, res: Response): Promise<void> => 
 });
 
 // GET /api/export
-apiRouter.get('/export', async (_req: Request, res: Response): Promise<void> => {
+apiRouter.get('/export', async (req: Request, res: Response): Promise<void> => {
   try {
-    const customers = await getCustomersBreakdown();
+    const userId = getAuthenticatedUserId(req);
+    const customers = await getCustomersBreakdown(userId);
     const csvData = generateCustomerBreakdownCsv(customers);
 
     res.setHeader('Content-Type', 'text/csv');

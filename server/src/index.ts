@@ -23,9 +23,23 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Clerk Authentication Middleware (if secret key configured)
 import { clerkMiddleware } from '@clerk/express';
+if (!process.env.CLERK_PUBLISHABLE_KEY) {
+  process.env.CLERK_PUBLISHABLE_KEY =
+    process.env.VITE_CLERK_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+    'pk_test_YWNjZXB0ZWQtbW9sbHVzay0yNTQ2LmNsZXJrLmFjY291bnRzLmRldiQ';
+}
+
 if (process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY.trim().startsWith('sk_')) {
-  app.use(clerkMiddleware());
-  console.log('[Auth] Clerk middleware enabled with CLERK_SECRET_KEY.');
+  try {
+    app.use(clerkMiddleware({
+      publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      secretKey: process.env.CLERK_SECRET_KEY
+    }));
+    console.log('[Auth] Clerk middleware enabled with CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY.');
+  } catch (err) {
+    console.warn('[Auth] Clerk middleware warning:', err);
+  }
 }
 
 // API Routes

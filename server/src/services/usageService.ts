@@ -68,25 +68,34 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
   return processed;
 }
 
-export async function saveRecords(records: CalculatedRecord[]): Promise<number> {
+export async function saveRecords(records: CalculatedRecord[], userId: string = 'demo-user'): Promise<number> {
   if (records.length === 0) return 0;
 
   // Group unique customer IDs to upsert
   const uniqueCustomerIds = Array.from(new Set(records.map(r => r.customerId)));
 
   await db.$transaction(async (tx) => {
-    // Upsert all customers
+    // Upsert all customers scoped to this user
     for (const cid of uniqueCustomerIds) {
       await tx.customer.upsert({
-        where: { customerId: cid },
+        where: {
+          userId_customerId: {
+            userId,
+            customerId: cid
+          }
+        },
         update: {},
-        create: { customerId: cid }
+        create: {
+          userId,
+          customerId: cid
+        }
       });
     }
 
-    // Bulk insert usage records
+    // Bulk insert usage records scoped to this user
     await tx.usageRecord.createMany({
       data: records.map(r => ({
+        userId,
         customerId: r.customerId,
         timestamp: r.timestamp,
         modelName: r.modelName,
@@ -135,8 +144,9 @@ export function parseJson(jsonTextOrData: unknown): RawUsageInput[] {
   return data as RawUsageInput[];
 }
 
-export async function getCustomersBreakdown(): Promise<CustomerBreakdown[]> {
+export async function getCustomersBreakdown(userId: string = 'demo-user'): Promise<CustomerBreakdown[]> {
   const records = await db.usageRecord.findMany({
+    where: { userId },
     select: {
       customerId: true,
       inputTokens: true,
@@ -203,8 +213,8 @@ export async function getCustomersBreakdown(): Promise<CustomerBreakdown[]> {
   return result;
 }
 
-export async function getOverallSummary(): Promise<UsageSummary> {
-  const breakdown = await getCustomersBreakdown();
+export async function getOverallSummary(userId: string = 'demo-user'): Promise<UsageSummary> {
+  const breakdown = await getCustomersBreakdown(userId);
 
   if (breakdown.length === 0) {
     return {
@@ -249,7 +259,7 @@ export async function getOverallSummary(): Promise<UsageSummary> {
   };
 }
 
-export async function clearAllData(): Promise<void> {
-  await db.usageRecord.deleteMany();
-  await db.customer.deleteMany();
+export async function clearAllData(userId: string = 'demo-user'): Promise<void> {
+  await db.usageRecord.deleteMany({ where: { userId } });
+  await db.customer.deleteMany({ where: { userId } });
 }

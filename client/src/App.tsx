@@ -29,7 +29,7 @@ const INITIAL_SUMMARY: UsageSummary = {
 };
 
 function MainAppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [currentView, setCurrentView] = useState<'landing' | 'app'>('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -45,11 +45,34 @@ function MainAppContent() {
     setAlert({ message, type });
   };
 
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const headers: Record<string, string> = {};
+    try {
+      if ((window as any).Clerk?.session) {
+        const token = await (window as any).Clerk.session.getToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        if ((window as any).Clerk.user?.id) {
+          headers['x-user-id'] = (window as any).Clerk.user.id;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (!headers['Authorization'] && user?.id) {
+      headers['x-user-id'] = user.id;
+    }
+    return headers;
+  }, [user]);
+
   const loadData = useCallback(async () => {
     try {
+      const authHeaders = await getAuthHeaders();
       const [summaryRes, customersRes] = await Promise.all([
-        fetch('/api/summary'),
-        fetch('/api/customers')
+        fetch('/api/summary', { headers: authHeaders }),
+        fetch('/api/customers', { headers: authHeaders })
       ]);
 
       if (summaryRes.ok) {
@@ -64,7 +87,7 @@ function MainAppContent() {
     } catch (err) {
       console.error('Failed to load usage data:', err);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
   const loadPricing = useCallback(async () => {
     try {
@@ -87,7 +110,11 @@ function MainAppContent() {
     setLoading(true);
     showAlert('Loading sample usage logs...', 'info');
     try {
-      const res = await fetch('/api/load-sample', { method: 'POST' });
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/load-sample', {
+        method: 'POST',
+        headers: authHeaders
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load sample');
 
@@ -100,15 +127,34 @@ function MainAppContent() {
     }
   };
 
-  const handleExportCsv = () => {
-    window.location.href = '/api/export';
+  const handleExportCsv = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/export', { headers: authHeaders });
+      if (!res.ok) throw new Error('Failed to export CSV');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'customer_cost_breakdown.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Error exporting CSV', 'error');
+    }
   };
 
   const handleClearData = async () => {
     if (!window.confirm('Are you sure you want to clear all usage data?')) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/clear', { method: 'POST' });
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/clear', {
+        method: 'POST',
+        headers: authHeaders
+      });
       const data = await res.json();
       showAlert(data.message, 'success');
       await loadData();
@@ -126,8 +172,10 @@ function MainAppContent() {
     formData.append('file', file);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/upload', {
         method: 'POST',
+        headers: authHeaders,
         body: formData
       });
       const data = await res.json();
@@ -147,9 +195,13 @@ function MainAppContent() {
     showAlert('Processing pasted data...', 'info');
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/paste', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({ content, format })
       });
       const data = await res.json();

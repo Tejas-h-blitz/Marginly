@@ -7,11 +7,16 @@ import crypto from 'crypto';
 export interface IDatabase {
   isPrisma: boolean;
   customer: {
-    upsert(args: { where: { customerId: string }; update: Record<string, unknown>; create: { customerId: string } }): Promise<unknown>;
-    deleteMany(): Promise<unknown>;
+    upsert(args: {
+      where: { userId_customerId: { userId: string; customerId: string } };
+      update: Record<string, unknown>;
+      create: { userId: string; customerId: string };
+    }): Promise<unknown>;
+    deleteMany(args?: { where?: { userId?: string } }): Promise<unknown>;
   };
   usageRecord: {
     createMany(args: { data: Array<{
+      userId: string;
       customerId: string;
       timestamp: Date | null;
       modelName: string;
@@ -23,6 +28,7 @@ export interface IDatabase {
       totalCost: number;
     }> }): Promise<{ count: number }>;
     findMany(args?: {
+      where?: { userId?: string };
       select?: {
         customerId?: boolean;
         inputTokens?: boolean;
@@ -37,7 +43,7 @@ export interface IDatabase {
       totalTokens: number;
       totalCost: number;
     }>>;
-    deleteMany(): Promise<unknown>;
+    deleteMany(args?: { where?: { userId?: string } }): Promise<unknown>;
   };
   modelPricing: {
     findMany(): Promise<Array<{
@@ -104,15 +110,41 @@ async function getPglite(): Promise<PGlite> {
     }
     pgliteInstance = new PGlite(dbDir);
 
-    // Apply migration SQL
-    const migrationPath = path.resolve(__dirname, '../prisma/migrations/20260922000000_init/migration.sql');
-    if (fs.existsSync(migrationPath)) {
+    // Apply init migration SQL
+    const initMigrationPath = path.resolve(__dirname, '../prisma/migrations/20260922000000_init/migration.sql');
+    if (fs.existsSync(initMigrationPath)) {
       try {
-        const sql = fs.readFileSync(migrationPath, 'utf-8');
+        const sql = fs.readFileSync(initMigrationPath, 'utf-8');
         await pgliteInstance.exec(sql);
       } catch {
         // Tables already created
       }
+    }
+
+    // Apply multi-tenancy migration SQL
+    const multiTenancyMigrationPath = path.resolve(__dirname, '../prisma/migrations/20261002000000_add_user_id_multi_tenancy/migration.sql');
+    if (fs.existsSync(multiTenancyMigrationPath)) {
+      try {
+        const sql = fs.readFileSync(multiTenancyMigrationPath, 'utf-8');
+        await pgliteInstance.exec(sql);
+      } catch {
+        // Migration already applied or partial
+      }
+    }
+
+    // Ensure columns, constraints, and indexes exist idempotently
+    try {
+      await pgliteInstance.exec(`
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'demo-user';
+        ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'demo-user';
+        DROP INDEX IF EXISTS customers_customer_id_key;
+        CREATE UNIQUE INDEX IF NOT EXISTS customers_user_id_customer_id_key ON customers(user_id, customer_id);
+        CREATE INDEX IF NOT EXISTS customers_user_id_idx ON customers(user_id);
+        CREATE INDEX IF NOT EXISTS usage_records_user_id_idx ON usage_records(user_id);
+        CREATE INDEX IF NOT EXISTS usage_records_user_id_customer_id_idx ON usage_records(user_id, customer_id);
+      `);
+    } catch {
+      // Ignored if already up to date
     }
   }
   return pgliteInstance;
@@ -162,19 +194,24 @@ export const db: IDatabase = {
       }
       const pg = await getPglite();
       const id = crypto.randomUUID();
+      const userId = args.create.userId || 'demo-user';
+      const customerId = args.create.customerId;
       await pg.query(`
-        INSERT INTO customers (id, customer_id, updated_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (customer_id) DO NOTHING;
-      `, [id, args.create.customerId]);
-      return { customerId: args.create.customerId };
+        INSERT INTO customers (id, user_id, customer_id, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, customer_id) DO NOTHING;
+      `, [id, userId, customerId]);
+      return { userId, customerId };
     },
 
-    async deleteMany() {
+    async deleteMany(args) {
       if (usePrisma) {
-        return (prisma as any).customer.deleteMany();
+        return (prisma as any).customer.deleteMany(args);
       }
       const pg = await getPglite();
+      if (args?.where?.userId) {
+        return pg.query('DELETE FROM customers WHERE user_id = $1;', [args.where.userId]);
+      }
       return pg.query('DELETE FROM customers;');
     }
   },
@@ -187,14 +224,16 @@ export const db: IDatabase = {
       const pg = await getPglite();
       for (const r of args.data) {
         const id = crypto.randomUUID();
+        const userId = r.userId || 'demo-user';
         await pg.query(`
           INSERT INTO usage_records (
-            id, customer_id, timestamp, model_name,
+            id, user_id, customer_id, timestamp, model_name,
             input_tokens, output_tokens, total_tokens,
             input_cost, output_cost, total_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
         `, [
           id,
+          userId,
           r.customerId,
           r.timestamp ? r.timestamp.toISOString() : null,
           r.modelName,
@@ -209,26 +248,30 @@ export const db: IDatabase = {
       return { count: args.data.length };
     },
 
-    async findMany() {
+    async findMany(args) {
       if (usePrisma) {
-        return (prisma as any).usageRecord.findMany({
-          select: {
-            customerId: true,
-            inputTokens: true,
-            outputTokens: true,
-            totalTokens: true,
-            totalCost: true
-          }
-        });
+        return (prisma as any).usageRecord.findMany(args);
       }
       const pg = await getPglite();
-      const res = await pg.query<{
-        customer_id: string;
-        input_tokens: number;
-        output_tokens: number;
-        total_tokens: number;
-        total_cost: number;
-      }>('SELECT customer_id, input_tokens, output_tokens, total_tokens, total_cost FROM usage_records;');
+      const userId = args?.where?.userId;
+      let res;
+      if (userId) {
+        res = await pg.query<{
+          customer_id: string;
+          input_tokens: number;
+          output_tokens: number;
+          total_tokens: number;
+          total_cost: number;
+        }>('SELECT customer_id, input_tokens, output_tokens, total_tokens, total_cost FROM usage_records WHERE user_id = $1;', [userId]);
+      } else {
+        res = await pg.query<{
+          customer_id: string;
+          input_tokens: number;
+          output_tokens: number;
+          total_tokens: number;
+          total_cost: number;
+        }>('SELECT customer_id, input_tokens, output_tokens, total_tokens, total_cost FROM usage_records;');
+      }
 
       return res.rows.map(r => ({
         customerId: r.customer_id,
@@ -239,11 +282,14 @@ export const db: IDatabase = {
       }));
     },
 
-    async deleteMany() {
+    async deleteMany(args) {
       if (usePrisma) {
-        return (prisma as any).usageRecord.deleteMany();
+        return (prisma as any).usageRecord.deleteMany(args);
       }
       const pg = await getPglite();
+      if (args?.where?.userId) {
+        return pg.query('DELETE FROM usage_records WHERE user_id = $1;', [args.where.userId]);
+      }
       return pg.query('DELETE FROM usage_records;');
     }
   },

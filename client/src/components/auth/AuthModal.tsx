@@ -1,7 +1,36 @@
 import React, { useState } from 'react';
 import { SignIn, SignUp } from '@clerk/react';
+import { dark } from '@clerk/themes';
 import { useAuth } from '../../context/AuthContext.js';
 import { isClerkConfigured } from '../../context/ClerkProviderWrapper.js';
+
+const clerkDarkAppearance = {
+  baseTheme: dark,
+  variables: {
+    colorPrimary: '#10b981',
+    colorBackground: '#0b0f17',
+    colorInputBackground: '#07090e',
+    colorInputText: '#ffffff',
+    colorText: '#f8fafc',
+    colorTextSecondary: '#94a3b8',
+    borderRadius: '1rem'
+  },
+  elements: {
+    rootBox: 'w-full',
+    card: 'bg-slate-900/95 border border-white/10 shadow-2xl rounded-3xl w-full',
+    headerTitle: 'text-white font-extrabold text-lg',
+    headerSubtitle: 'text-slate-400 text-xs',
+    socialButtonsBlockButton: 'bg-white/5 border border-white/10 hover:bg-white/10 text-white font-medium text-xs rounded-xl py-2.5',
+    socialButtonsBlockButtonText: 'text-white font-medium text-xs',
+    dividerLine: 'bg-white/10',
+    dividerText: 'text-slate-500 text-[11px]',
+    formFieldLabel: 'text-slate-300 text-xs font-medium',
+    formFieldInput: 'bg-slate-950 border border-white/10 text-white text-xs rounded-xl px-3.5 py-2.5 focus:border-emerald-500',
+    formButtonPrimary: 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs py-2.5 rounded-xl shadow-md shadow-emerald-500/20',
+    footerActionLink: 'text-emerald-400 hover:text-emerald-300 font-semibold',
+    footer: 'bg-slate-900 border-t border-white/5 rounded-b-3xl'
+  }
+};
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -76,11 +105,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               <SignIn
                 routing="hash"
                 fallbackRedirectUrl="#/app"
+                appearance={clerkDarkAppearance as any}
               />
             ) : (
               <SignUp
                 routing="hash"
                 fallbackRedirectUrl="#/app"
+                appearance={clerkDarkAppearance as any}
               />
             )}
 

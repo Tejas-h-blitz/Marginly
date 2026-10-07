@@ -9,18 +9,22 @@ generator client {
 
 model Customer {
   id           String        @id @default(uuid())
-  customerId   String        @unique @map("customer_id")
+  userId       String        @default("demo-user") @map("user_id")
+  customerId   String        @map("customer_id")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   usageRecords UsageRecord[]
 
+  @@unique([userId, customerId])
+  @@index([userId])
   @@map("customers")
 }
 
 model UsageRecord {
   id           String    @id @default(uuid())
+  userId       String    @default("demo-user") @map("user_id")
   customerId   String    @map("customer_id")
-  customer     Customer  @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  customer     Customer  @relation(fields: [userId, customerId], references: [userId, customerId], onDelete: Cascade)
   timestamp    DateTime?
   modelName    String    @map("model_name")
   inputTokens  Int       @map("input_tokens")
@@ -31,7 +35,8 @@ model UsageRecord {
   totalCost    Float     @map("total_cost")
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  @@index([customerId])
+  @@index([userId])
+  @@index([userId, customerId])
   @@index([modelName])
   @@map("usage_records")
 }
