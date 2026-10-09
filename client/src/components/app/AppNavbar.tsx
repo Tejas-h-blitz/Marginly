@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserButton } from '@clerk/react';
 import { useAuth } from '../../context/AuthContext.js';
+import { useTheme } from '../../context/ThemeContext.js';
 import { isClerkConfigured } from '../../context/ClerkProviderWrapper.js';
 
 interface AppNavbarProps {
@@ -19,107 +20,122 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
   totalCustomers
 }) => {
   const { user, workspace, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-dark-bg/90 backdrop-blur-xl border-b border-dark-border px-4 sm:px-6 py-3 shadow-md">
+    <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0c0d0f]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 px-4 sm:px-6 py-2.5 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
         {/* Left Section: Logo & Workspace Selector */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           {/* Logo */}
           <button
             onClick={onBackToLanding}
-            className="flex items-center gap-2.5 text-left group"
+            className="flex items-center gap-2 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 rounded-lg p-0.5"
             title="Return to Landing Page"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-indigo via-brand-emerald to-emerald-400 p-[1px] shadow-md shadow-emerald-500/20 group-hover:shadow-emerald-500/30 transition-all">
-              <div className="w-full h-full bg-dark-bg rounded-[11px] flex items-center justify-center">
-                <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center text-zinc-100 dark:text-zinc-950 font-bold transition-all shadow-sm">
+              <svg className="w-4 h-4 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
             </div>
-            <div className="hidden sm:block">
-              <span className="text-base font-extrabold text-white tracking-tight">Marginly</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Marginly
+              </span>
+              <span className="hidden sm:inline-block text-[10px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-200/80 dark:border-zinc-700/60">
+                SaaS Instrument
+              </span>
             </div>
           </button>
 
-          <div className="h-5 w-px bg-white/10 hidden sm:block" />
+          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
 
-          {/* Workspace Selector Dropdown */}
+          {/* Workspace Selector */}
           <div className="relative">
             <button
               onClick={() => setWorkspaceDropdownOpen(!workspaceDropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-secondary/80 border border-dark-border hover:border-white/20 text-xs font-semibold text-slate-200 transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/70 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="max-w-[130px] sm:max-w-none truncate">{workspace.name}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                {workspace.tier}
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="max-w-[120px] sm:max-w-none truncate text-[11px] font-mono">{workspace.name}</span>
+              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
+                ({workspace.tier})
               </span>
-              <svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="w-3 h-3 text-zinc-400 ml-0.5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </button>
 
             {workspaceDropdownOpen && (
-              <div className="absolute left-0 mt-2 w-56 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-2 z-50 animate-fadeIn">
-                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Switch Workspace
+              <div className="absolute left-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-lg p-1.5 z-50 animate-in fade-in zoom-in-95">
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-mono">
+                  Active Workspace
                 </div>
                 <button
                   onClick={() => setWorkspaceDropdownOpen(false)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 text-xs text-white font-medium"
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
                 >
-                  <span>Acme AI / Production</span>
-                  <span className="text-emerald-400">✓</span>
-                </button>
-                <button
-                  onClick={() => setWorkspaceDropdownOpen(false)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/5 text-xs text-slate-400 font-medium"
-                >
-                  <span>Staging / Sandbox</span>
-                  <span className="text-[10px] text-slate-500">Free</span>
+                  <span className="truncate">{workspace.name}</span>
+                  <span className="text-zinc-600 dark:text-zinc-300 text-xs">✓</span>
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Section: Actions & User Avatar */}
-        <div className="flex items-center gap-2.5">
+        {/* Right Section: Actions, Theme Toggle & User */}
+        <div className="flex items-center gap-2">
           
-          {/* Import Logs Button (Highlighted) */}
-          <button
-            onClick={onOpenImport}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all transform active:scale-95"
-          >
-            <svg className="w-3.5 h-3.5 stroke-slate-950 fill-none stroke-2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">Import Logs</span>
-            <span className="sm:hidden">Import</span>
-          </button>
-
           {/* Model Pricing Rate Card */}
           <button
             onClick={onOpenPricing}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-secondary hover:bg-slate-800 border border-dark-border text-xs font-semibold text-slate-300 hover:text-white transition-all"
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 transition-colors"
           >
-            <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="w-3.5 h-3.5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
             </svg>
             <span>Model Rates</span>
+          </button>
+
+          {/* Landing Page Link Button */}
+          <button
+            onClick={onBackToLanding}
+            className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 transition-colors"
+          >
+            <span>Landing</span>
+          </button>
+
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+          >
+            {theme === 'dark' ? (
+              // Sun icon for light mode
+              <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+              </svg>
+            ) : (
+              // Moon icon for dark mode
+              <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+              </svg>
+            )}
           </button>
 
           {/* Clear Data (if records exist) */}
           {totalCustomers > 0 && (
             <button
               onClick={onClearData}
-              className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all"
+              className="p-1.5 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-zinc-200/80 dark:border-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
               title="Clear all stored logs"
+              aria-label="Clear all stored logs"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -127,92 +143,64 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
             </button>
           )}
 
-          {/* Landing Page Link Button */}
+          {/* Import Logs Button (Primary Action) */}
           <button
-            onClick={onBackToLanding}
-            className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 hover:text-white transition-all"
+            onClick={onOpenImport}
+            className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
-            <span>Landing Page</span>
-            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+            <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
+            <span>Import Logs</span>
           </button>
 
           {/* User Profile Avatar & Dropdown */}
           {isClerkConfigured() ? (
-            <div className="flex items-center">
+            <div className="flex items-center ml-1">
               <UserButton
                 appearance={{
                   elements: {
-                    userButtonAvatarBox: 'w-7 h-7 ring-2 ring-emerald-500/30'
+                    userButtonAvatarBox: 'w-6 h-6 rounded-md ring-1 ring-zinc-300 dark:ring-zinc-700'
                   }
                 }}
               />
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative ml-1">
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 transition-all"
+                className="flex items-center gap-1.5 p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
               >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-brand-indigo to-emerald-400 p-[1px]">
-                  <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center font-bold text-[11px] text-white">
-                    {user ? user.name.slice(0, 2).toUpperCase() : 'DF'}
-                  </div>
+                <div className="w-6 h-6 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold flex items-center justify-center">
+                  {user ? user.name.slice(0, 2).toUpperCase() : 'DF'}
                 </div>
               </button>
 
-            {profileDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-2 z-50 animate-fadeIn">
-                <div className="px-3 py-2 border-b border-white/10 mb-1">
-                  <div className="text-xs font-bold text-white">{user?.name || 'Demo Founder'}</div>
-                  <div className="text-[11px] text-slate-400 truncate">{user?.email || 'founder@demo.ai'}</div>
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 z-50">
+                  <div className="px-2.5 py-1.5 border-b border-zinc-100 dark:border-zinc-800/80 mb-1">
+                    <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {user ? user.name : 'Founder'}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 font-mono truncate">
+                      {user ? user.email : 'alex@acme-ai.com'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setProfileDropdownOpen(false);
+                      onBackToLanding();
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-xs text-rose-600 dark:text-rose-400 font-medium"
+                  >
+                    Sign Out
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setProfileDropdownOpen(false);
-                    onBackToLanding();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 text-xs text-slate-300 font-medium"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                  </svg>
-                  <span>Marketing Page</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setProfileDropdownOpen(false);
-                    onOpenPricing();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 text-xs text-slate-300 font-medium"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                  </svg>
-                  <span>Model Pricing</span>
-                </button>
-                <div className="border-t border-white/10 my-1" />
-                <button
-                  onClick={() => {
-                    setProfileDropdownOpen(false);
-                    logout();
-                    onBackToLanding();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-xs text-rose-400 font-medium"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Sign Out</span>
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
+              )}
+            </div>
+          )}
         </div>
-
       </div>
     </header>
   );

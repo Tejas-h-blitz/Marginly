@@ -41,32 +41,32 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
       setPasteContent(JSON.stringify([
         {
           customer_id: "cust_enterprise_alpha",
-          timestamp: "2026-09-22T12:00:00Z",
+          timestamp: "2026-10-01T12:00:00Z",
           model_name: "gpt-4o",
-          input_tokens: 15000,
-          output_tokens: 3200
+          input_tokens: 25000,
+          output_tokens: 12000
         },
         {
           customer_id: "cust_growth_beta",
-          timestamp: "2026-09-22T12:05:00Z",
+          timestamp: "2026-10-01T12:15:00Z",
           model_name: "claude-3-5-sonnet",
-          input_tokens: 28000,
-          output_tokens: 4900
+          input_tokens: 40000,
+          output_tokens: 18000
         },
         {
           customer_id: "cust_starter_gamma",
-          timestamp: "2026-09-22T12:10:00Z",
+          timestamp: "2026-10-01T12:30:00Z",
           model_name: "gpt-4o-mini",
-          input_tokens: 3500,
-          output_tokens: 800
+          input_tokens: 150000,
+          output_tokens: 80000
         }
       ], null, 2));
     } else {
       setPasteContent([
         "customer_id,timestamp,model_name,input_tokens,output_tokens",
-        "cust_enterprise_alpha,2026-09-22T12:00:00Z,gpt-4o,15000,3200",
-        "cust_growth_beta,2026-09-22T12:05:00Z,claude-3-5-sonnet,28000,4900",
-        "cust_starter_gamma,2026-09-22T12:10:00Z,gpt-4o-mini,3500,800"
+        "cust_enterprise_alpha,2026-10-01T12:00:00Z,gpt-4o,25000,12000",
+        "cust_growth_beta,2026-10-01T12:15:00Z,claude-3-5-sonnet,40000,18000",
+        "cust_starter_gamma,2026-10-01T12:30:00Z,gpt-4o-mini,150000,80000"
       ].join('\n'));
     }
   };
@@ -77,44 +77,29 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
   };
 
   return (
-    <section className="bg-dark-card border border-dark-border rounded-2xl p-6 mb-7 shadow-sm">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
-        <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <svg className="w-5 h-5 stroke-brand-indigo fill-none stroke-2" viewBox="0 0 24 24">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Import Usage Logs
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Import CSV or JSON logs containing customer_id, timestamp, model_name, input_tokens, output_tokens
-          </p>
-        </div>
-
-        <div className="flex bg-dark-secondary p-1 rounded-lg border border-dark-border gap-1">
-          <button
-            onClick={() => setActiveTab('upload')}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'upload'
-                ? 'bg-brand-indigo text-white shadow-md shadow-brand-indigo/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Upload File
-          </button>
-          <button
-            onClick={() => setActiveTab('paste')}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'paste'
-                ? 'bg-brand-indigo text-white shadow-md shadow-brand-indigo/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Paste Raw Data
-          </button>
-        </div>
+    <div className="space-y-4">
+      {/* Mode Tabs */}
+      <div className="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-xs w-fit">
+        <button
+          onClick={() => setActiveTab('upload')}
+          className={`px-3 py-1 rounded-md font-medium transition-colors ${
+            activeTab === 'upload'
+              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs'
+              : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+          }`}
+        >
+          Upload CSV / JSON
+        </button>
+        <button
+          onClick={() => setActiveTab('paste')}
+          className={`px-3 py-1 rounded-md font-medium transition-colors ${
+            activeTab === 'paste'
+              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs'
+              : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+          }`}
+        >
+          Paste Raw Text
+        </button>
       </div>
 
       {activeTab === 'upload' ? (
@@ -123,10 +108,10 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
             dragOver
-              ? 'border-brand-indigo bg-brand-indigo/5'
-              : 'border-slate-700/60 bg-dark-secondary/50 hover:border-brand-indigo/60 hover:bg-brand-indigo/[0.02]'
+              ? 'border-zinc-500 bg-zinc-100 dark:bg-zinc-800/40'
+              : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 hover:border-zinc-300 dark:hover:border-zinc-700'
           }`}
         >
           <input
@@ -136,61 +121,58 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
             className="hidden"
             onChange={handleFileChange}
           />
-          <div className="w-12 h-12 mx-auto mb-3 bg-brand-indigo/15 rounded-full flex items-center justify-center text-indigo-400">
-            <svg className="w-6 h-6 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
+          <div className="w-9 h-9 mx-auto mb-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
-          <div className="text-sm font-semibold text-white mb-1">
-            Click or drag & drop usage file here
+          <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 mb-0.5">
+            Click to upload or drag & drop CSV file
           </div>
-          <div className="text-xs text-slate-400 mb-3">
-            Supports .csv or .json files
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3">
+            OpenAI & Anthropic API export format
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-slate-400">
-            <span>Required headers:</span>
-            <code className="bg-dark-surface px-1.5 py-0.5 rounded text-slate-200 font-mono">customer_id</code>
-            <code className="bg-dark-surface px-1.5 py-0.5 rounded text-slate-200 font-mono">timestamp</code>
-            <code className="bg-dark-surface px-1.5 py-0.5 rounded text-slate-200 font-mono">model_name</code>
-            <code className="bg-dark-surface px-1.5 py-0.5 rounded text-slate-200 font-mono">input_tokens</code>
-            <code className="bg-dark-surface px-1.5 py-0.5 rounded text-slate-200 font-mono">output_tokens</code>
+          <div className="flex flex-wrap items-center justify-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+            <span>Required columns:</span>
+            <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">customer_id</code>
+            <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">model_name</code>
+            <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">input_tokens</code>
+            <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">output_tokens</code>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-center flex-wrap gap-2">
-            <div className="flex items-center gap-3 text-xs text-slate-300">
-              <span className="font-semibold text-slate-400">Format:</span>
-              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+        <div className="space-y-2.5">
+          <div className="flex justify-between items-center text-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-zinc-500">Format:</span>
+              <label className="inline-flex items-center gap-1 cursor-pointer">
                 <input
                   type="radio"
                   name="format"
                   value="csv"
                   checked={pasteFormat === 'csv'}
                   onChange={() => setPasteFormat('csv')}
-                  className="accent-brand-indigo"
+                  className="accent-zinc-900 dark:accent-zinc-100"
                 />
-                CSV
+                <span className="text-zinc-700 dark:text-zinc-300">CSV</span>
               </label>
-              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+              <label className="inline-flex items-center gap-1 cursor-pointer">
                 <input
                   type="radio"
                   name="format"
                   value="json"
                   checked={pasteFormat === 'json'}
                   onChange={() => setPasteFormat('json')}
-                  className="accent-brand-indigo"
+                  className="accent-zinc-900 dark:accent-zinc-100"
                 />
-                JSON
+                <span className="text-zinc-700 dark:text-zinc-300">JSON</span>
               </label>
             </div>
 
             <button
               type="button"
               onClick={insertTemplate}
-              className="text-xs font-semibold px-2.5 py-1.5 rounded-md bg-dark-surface hover:bg-slate-700/80 border border-dark-border text-slate-200 transition-all cursor-pointer"
+              className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 underline underline-offset-2"
             >
               Insert Sample Rows
             </button>
@@ -199,23 +181,19 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
           <textarea
             value={pasteContent}
             onChange={(e) => setPasteContent(e.target.value)}
-            rows={5}
-            className="w-full bg-[#090d16] border border-dark-border focus:border-brand-indigo focus:ring-1 focus:ring-brand-indigo rounded-lg p-3 text-slate-200 font-mono text-xs leading-relaxed resize-y outline-none"
-            placeholder={`Paste your ${pasteFormat.toUpperCase()} rows here...\nExample:\ncustomer_id,timestamp,model_name,input_tokens,output_tokens\ncust_alpha,2026-09-22T10:00:00Z,gpt-4o,12500,2400`}
+            rows={6}
+            className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-600 rounded-lg p-3 text-zinc-900 dark:text-zinc-100 font-mono text-[11px] leading-relaxed resize-y outline-none"
+            placeholder={`Paste raw ${pasteFormat.toUpperCase()} rows here...\nExample:\ncustomer_id,timestamp,model_name,input_tokens,output_tokens\ncust_alpha,2026-10-01T10:00:00Z,gpt-4o,25000,12000`}
           />
 
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-1">
             <button
               type="button"
               disabled={loading || !pasteContent.trim()}
               onClick={handlePasteProcess}
-              className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-brand-indigo hover:bg-indigo-500 text-white shadow-md shadow-brand-indigo/30 transition-all disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs transition-all disabled:opacity-50"
             >
-              <svg className="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-              Process & Calculate Costs
+              {loading ? 'Processing...' : 'Process & Calculate Costs'}
             </button>
           </div>
         </div>
@@ -224,23 +202,23 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
       {/* Feedback Banner */}
       {alert && (
         <div
-          className={`mt-4 p-3 rounded-lg text-xs flex items-center justify-between transition-all ${
+          className={`p-3 rounded-lg text-xs flex items-center justify-between transition-colors ${
             alert.type === 'success'
-              ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-300'
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200'
               : alert.type === 'error'
-              ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
-              : 'bg-indigo-500/15 border border-indigo-500/40 text-indigo-300'
+              ? 'bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-200'
+              : 'bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200'
           }`}
         >
           <span>{alert.message}</span>
           <button
             onClick={onDismissAlert}
-            className="text-slate-400 hover:text-white font-bold ml-2 cursor-pointer"
+            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-2"
           >
-            ✕
+            ×
           </button>
         </div>
       )}
-    </section>
+    </div>
   );
 };

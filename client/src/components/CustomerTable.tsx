@@ -3,12 +3,13 @@ import { CustomerBreakdown } from '../types/index.js';
 
 interface CustomerTableProps {
   customers: CustomerBreakdown[];
+  loading?: boolean;
 }
 
 type SortField = 'totalCost' | 'totalRequests' | 'totalTokens' | 'customerId';
 type SortDirection = 'asc' | 'desc';
 
-export const CustomerTable: React.FC<CustomerTableProps> = ({ customers }) => {
+export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('totalCost');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -56,72 +57,61 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers }) => {
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  const getInitials = (id: string) => {
-    const clean = id.replace(/^(cust_|user_|client_)/, '');
-    const parts = clean.split('_');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return clean.slice(0, 2).toUpperCase();
-  };
-
   return (
-    <section className="bg-dark-card border border-dark-border rounded-3xl p-6 sm:p-7 shadow-sm">
-      {/* Header Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+    <section className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl overflow-hidden shadow-sm transition-colors">
+      {/* Table Toolbar */}
+      <div className="p-4 sm:p-5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <svg className="w-5 h-5 stroke-emerald-400 fill-none stroke-2" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <line x1="3" y1="9" x2="21" y2="9" />
-              <line x1="9" y1="21" x2="9" y2="9" />
-            </svg>
-            <span>Customer Cost Breakdown</span>
+          <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Account Expenditure Breakdown
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Unit economics sorted by spend volume • Click headers to change order
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Unit economics sorted by spend volume • Click any column header to sort
           </p>
         </div>
 
         {/* Filter Pills & Search */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-dark-secondary border border-dark-border text-xs">
+          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-xs">
             <button
               onClick={() => setFilterTier('all')}
-              className={`px-3 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                 filterTier === 'all'
-                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
               All ({customers.length})
             </button>
             <button
               onClick={() => setFilterTier('high')}
-              className={`px-3 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                 filterTier === 'high'
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 shadow-xs'
+                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              Whales (&ge;10%)
+              Whales (≥10%)
             </button>
             <button
               onClick={() => setFilterTier('low')}
-              className={`px-3 py-1 rounded-lg font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                 filterTier === 'low'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              Low Spenders (&lt;5%)
+              Low (&lt;5%)
             </button>
           </div>
 
-          {/* Search Box */}
-          <div className="relative flex-1 sm:w-60">
-            <svg className="w-4 h-4 stroke-slate-400 fill-none stroke-2 absolute left-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24">
+          {/* Search Input */}
+          <div className="relative flex-1 sm:w-56">
+            <svg
+              className="w-3.5 h-3.5 stroke-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 fill-none stroke-2"
+              viewBox="0 0 24 24"
+            >
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
@@ -130,127 +120,171 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers }) => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search customer ID..."
-              className="w-full bg-dark-secondary border border-dark-border focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-500 transition-all"
+              className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-600 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none transition-colors"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                ×
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Table Container */}
-      <div className="w-full overflow-x-auto rounded-2xl border border-dark-border">
-        <table className="w-full border-collapse text-left text-sm">
+      {/* Table Container with Sticky Header */}
+      <div className="w-full overflow-x-auto max-h-[520px]">
+        <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-dark-border bg-dark-secondary/70 text-[11px] font-semibold uppercase tracking-wider text-slate-400 select-none">
-              <th className="py-3 px-4">Rank</th>
+            <tr className="sticky top-0 bg-zinc-50/95 dark:bg-[#15161a]/95 backdrop-blur-sm border-b border-zinc-200/90 dark:border-zinc-800/90 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400 select-none z-10">
+              <th className="py-2.5 px-3.5 w-12 text-center font-mono">#</th>
               <th
                 onClick={() => handleSort('customerId')}
-                className="py-3 px-4 cursor-pointer hover:text-white transition-colors"
+                className="py-2.5 px-3.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <span>Customer ID</span>
                   {sortField === 'customerId' && (
-                    <span className="text-emerald-400">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                    <span className="font-mono text-zinc-900 dark:text-zinc-100">
+                      {sortDirection === 'asc' ? '▲' : '▼'}
+                    </span>
                   )}
                 </div>
               </th>
               <th
                 onClick={() => handleSort('totalRequests')}
-                className="py-3 px-4 cursor-pointer hover:text-white transition-colors text-right"
+                className="py-2.5 px-3.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-right"
               >
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-center justify-end gap-1">
                   <span>Requests</span>
                   {sortField === 'totalRequests' && (
-                    <span className="text-emerald-400">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                    <span className="font-mono text-zinc-900 dark:text-zinc-100">
+                      {sortDirection === 'asc' ? '▲' : '▼'}
+                    </span>
                   )}
                 </div>
               </th>
-              <th className="py-3 px-4 text-right">Input Tokens</th>
-              <th className="py-3 px-4 text-right">Output Tokens</th>
+              <th className="py-2.5 px-3.5 text-right">Input Tokens</th>
+              <th className="py-2.5 px-3.5 text-right">Output Tokens</th>
               <th
                 onClick={() => handleSort('totalTokens')}
-                className="py-3 px-4 cursor-pointer hover:text-white transition-colors text-right"
+                className="py-2.5 px-3.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-right"
               >
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-center justify-end gap-1">
                   <span>Total Tokens</span>
                   {sortField === 'totalTokens' && (
-                    <span className="text-emerald-400">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                    <span className="font-mono text-zinc-900 dark:text-zinc-100">
+                      {sortDirection === 'asc' ? '▲' : '▼'}
+                    </span>
                   )}
                 </div>
               </th>
-              <th className="py-3 px-4">Spend Share</th>
-              <th className="py-3 px-4 text-right">Avg / Req</th>
+              <th className="py-2.5 px-3.5 w-36">Spend Share</th>
+              <th className="py-2.5 px-3.5 text-right">Avg / Req</th>
               <th
                 onClick={() => handleSort('totalCost')}
-                className="py-3 px-4 cursor-pointer hover:text-white transition-colors text-right"
+                className="py-2.5 px-3.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-right"
               >
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-center justify-end gap-1">
                   <span>Total Cost (USD)</span>
                   {sortField === 'totalCost' && (
-                    <span className="text-emerald-400">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                    <span className="font-mono text-zinc-900 dark:text-zinc-100">
+                      {sortDirection === 'asc' ? '▲' : '▼'}
+                    </span>
                   )}
                 </div>
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60 bg-slate-950/20">
-            {filtered.length === 0 ? (
+
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+            {loading ? (
+              // Polished Loading Skeleton
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={`skeleton-${i}`} className="animate-pulse">
+                  <td className="py-3 px-3.5 text-center">
+                    <div className="h-3 w-4 bg-zinc-200 dark:bg-zinc-800 rounded mx-auto" />
+                  </td>
+                  <td className="py-3 px-3.5">
+                    <div className="h-3.5 w-32 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="h-3 w-12 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="h-3 w-16 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="h-3 w-16 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                  <td className="py-3 px-3.5">
+                    <div className="h-2 w-24 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="h-3 w-14 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="h-3.5 w-16 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                </tr>
+              ))
+            ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-slate-400">
+                <td colSpan={9} className="text-center py-12 text-zinc-500 dark:text-zinc-400">
                   {customers.length === 0 ? (
-                    <div>
-                      <svg className="w-10 h-10 mx-auto mb-3 stroke-slate-500 fill-none stroke-2" viewBox="0 0 24 24">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                        <line x1="8" y1="21" x2="16" y2="21" />
-                        <line x1="12" y1="17" x2="12" y2="21" />
-                      </svg>
-                      <p className="font-semibold text-slate-300">No usage logs loaded yet.</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Click <strong>Import Logs</strong> in the top navigation bar to analyze your customer spend.
+                    <div className="max-w-xs mx-auto py-2">
+                      <div className="w-9 h-9 mx-auto mb-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                          <line x1="8" y1="21" x2="16" y2="21" />
+                          <line x1="12" y1="17" x2="12" y2="21" />
+                        </svg>
+                      </div>
+                      <p className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">No usage records ingested</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">
+                        Upload an OpenAI or Anthropic CSV export to calculate customer unit costs.
                       </p>
                     </div>
                   ) : (
-                    <p>No customers matching &quot;{searchTerm}&quot; under this filter.</p>
+                    <p className="text-xs">No customers matching &quot;{searchTerm}&quot; under this filter.</p>
                   )}
                 </td>
               </tr>
             ) : (
               filtered.map((c, idx) => {
                 const rank = idx + 1;
-                let badgeStyle = 'bg-white/5 text-slate-400 border border-white/5';
-                if (rank === 1) badgeStyle = 'bg-rose-500/20 text-rose-300 border border-rose-500/40';
-                else if (rank === 2) badgeStyle = 'bg-amber-500/20 text-amber-300 border border-amber-500/40';
-                else if (rank === 3) badgeStyle = 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40';
-
-                const isHighCost = c.percentOfTotal >= 20 || rank === 1;
-                const initials = getInitials(c.customerId);
+                const isWhale = c.percentOfTotal >= 20 || rank === 1;
 
                 return (
-                  <tr key={c.customerId} className="hover:bg-slate-900/60 transition-colors">
+                  <tr
+                    key={c.customerId}
+                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors"
+                  >
                     {/* Rank */}
-                    <td className="py-3 px-4">
-                      <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold ${badgeStyle}`}>
-                        #{rank}
-                      </span>
+                    <td className="py-2.5 px-3.5 text-center font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
+                      {rank}
                     </td>
 
-                    {/* Customer ID + Avatar Monogram + Copy */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">
-                          {initials}
-                        </div>
-                        <span className="font-mono font-semibold text-slate-100 text-xs">
+                    {/* Customer ID + Copy Button */}
+                    <td className="py-2.5 px-3.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100 text-xs">
                           {c.customerId}
                         </span>
                         <button
                           onClick={() => copyToClipboard(c.customerId)}
-                          className="text-slate-500 hover:text-slate-300 transition-colors p-1"
+                          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors p-0.5"
                           title="Copy Customer ID"
                         >
                           {copiedId === c.customerId ? (
-                            <span className="text-[10px] text-emerald-400 font-sans font-bold">✓</span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold font-mono">✓</span>
                           ) : (
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth="2" />
                               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" />
                             </svg>
@@ -260,51 +294,55 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers }) => {
                     </td>
 
                     {/* Requests */}
-                    <td className="py-3 px-4 text-right text-slate-300 font-mono text-xs">
+                    <td className="py-2.5 px-3.5 text-right text-zinc-600 dark:text-zinc-400 font-mono tabular-nums text-xs">
                       {c.totalRequests.toLocaleString()}
                     </td>
 
                     {/* Input Tokens */}
-                    <td className="py-3 px-4 text-right text-slate-400 font-mono text-xs">
+                    <td className="py-2.5 px-3.5 text-right text-zinc-500 dark:text-zinc-400 font-mono tabular-nums text-xs">
                       {c.totalInputTokens.toLocaleString()}
                     </td>
 
                     {/* Output Tokens */}
-                    <td className="py-3 px-4 text-right text-slate-400 font-mono text-xs">
+                    <td className="py-2.5 px-3.5 text-right text-zinc-500 dark:text-zinc-400 font-mono tabular-nums text-xs">
                       {c.totalOutputTokens.toLocaleString()}
                     </td>
 
                     {/* Total Tokens */}
-                    <td className="py-3 px-4 text-right text-slate-200 font-mono text-xs font-medium">
+                    <td className="py-2.5 px-3.5 text-right text-zinc-800 dark:text-zinc-200 font-mono tabular-nums text-xs font-medium">
                       {c.totalTokens.toLocaleString()}
                     </td>
 
-                    {/* Spend Share */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2 w-32">
-                        <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    {/* Spend Share Inline Bar */}
+                    <td className="py-2.5 px-3.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
-                              isHighCost
-                                ? 'bg-gradient-to-r from-amber-500 to-rose-500'
-                                : 'bg-gradient-to-r from-indigo-500 to-cyan-500'
+                              isWhale
+                                ? 'bg-amber-500'
+                                : 'bg-zinc-400 dark:bg-zinc-500'
                             }`}
                             style={{ width: `${Math.min(100, Math.max(3, c.percentOfTotal))}%` }}
                           />
                         </div>
-                        <span className="text-[11px] font-mono text-slate-400 min-w-[34px]">
+                        <span className="text-[11px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400 min-w-[34px] text-right">
                           {c.percentOfTotal}%
                         </span>
                       </div>
                     </td>
 
                     {/* Avg Cost / Req */}
-                    <td className="py-3 px-4 text-right font-mono text-xs text-slate-400">
+                    <td className="py-2.5 px-3.5 text-right font-mono tabular-nums text-xs text-zinc-500 dark:text-zinc-400">
                       ${c.avgCostPerRequest.toFixed(4)}
                     </td>
 
                     {/* Total Cost */}
-                    <td className={`py-3 px-4 text-right font-mono font-bold text-sm ${isHighCost ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    <td className={`py-2.5 px-3.5 text-right font-mono tabular-nums font-semibold text-xs ${
+                      isWhale
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-zinc-900 dark:text-zinc-100'
+                    }`}>
                       ${c.totalCost.toFixed(4)}
                     </td>
                   </tr>

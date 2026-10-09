@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,25 +8,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        dark: {
-          primary: '#0a0e1a',
-          secondary: '#0f172a',
-          card: '#131d33',
-          cardHover: '#192542',
-          surface: '#1e293b',
-          border: '#1e2c47',
+        // High-precision financial instrument neutral scale
+        surface: {
+          light: '#ffffff',
+          'light-subtle': '#f9fafb',
+          'light-muted': '#f3f4f6',
+          dark: '#111215',
+          'dark-subtle': '#16181d',
+          'dark-muted': '#1c1f26',
         },
-        brand: {
-          indigo: '#6366f1',
-          cyan: '#06b6d4',
-          emerald: '#10b981',
-          amber: '#f59e0b',
-          rose: '#f43f5e',
+        border: {
+          light: '#e5e7eb',
+          'light-subtle': '#f3f4f6',
+          dark: '#262930',
+          'dark-subtle': '#1e2026',
+        },
+        accent: {
+          // Warning & Whale concentration accent (used sparingly)
+          warning: '#f59e0b',
+          'warning-subtle': 'rgba(245, 158, 11, 0.12)',
+          negative: '#ef4444',
+          'negative-subtle': 'rgba(239, 68, 68, 0.12)',
+          healthy: '#10b981',
+          'healthy-subtle': 'rgba(16, 185, 129, 0.12)',
         }
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       }
     },
   },

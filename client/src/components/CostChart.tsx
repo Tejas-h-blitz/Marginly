@@ -10,6 +10,7 @@ import {
   Cell
 } from 'recharts';
 import { CustomerBreakdown } from '../types/index.js';
+import { useTheme } from '../context/ThemeContext.js';
 
 interface CostChartProps {
   customers: CustomerBreakdown[];
@@ -29,21 +30,31 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
   if (active && payload && payload.length > 0) {
     const data = payload[0].payload;
     return (
-      <div className="bg-slate-900 border border-slate-700/80 rounded-lg p-3 shadow-xl text-xs space-y-1">
-        <div className="font-mono font-bold text-white border-b border-slate-800 pb-1 mb-1">
+      <div className="bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg text-xs space-y-1">
+        <div className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-1 mb-1">
           {data.customerId}
         </div>
-        <div className="text-emerald-400 font-semibold">
-          Total Cost: ${data.totalCost.toFixed(4)} USD
+        <div className="flex justify-between gap-4 font-mono">
+          <span className="text-zinc-500">Spend:</span>
+          <span className="font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+            ${data.totalCost.toFixed(4)} USD
+          </span>
         </div>
-        <div className="text-slate-300">
-          Requests: {data.totalRequests.toLocaleString()}
+        <div className="flex justify-between gap-4 font-mono">
+          <span className="text-zinc-500">Share:</span>
+          <span className="text-zinc-700 dark:text-zinc-300 tabular-nums">
+            {data.percentOfTotal}% of bill
+          </span>
         </div>
-        <div className="text-slate-300">
-          Tokens: {data.totalTokens.toLocaleString()} ({data.percentOfTotal}% of total spend)
+        <div className="flex justify-between gap-4 font-mono">
+          <span className="text-zinc-500">Volume:</span>
+          <span className="text-zinc-700 dark:text-zinc-300 tabular-nums">
+            {data.totalTokens.toLocaleString()} tokens
+          </span>
         </div>
-        <div className="text-slate-400 text-[11px]">
-          Avg: ${data.avgCostPerRequest.toFixed(5)} / req
+        <div className="flex justify-between gap-4 font-mono text-[11px] text-zinc-400 dark:text-zinc-500 pt-0.5">
+          <span>Avg / Req:</span>
+          <span className="tabular-nums">${data.avgCostPerRequest.toFixed(5)}</span>
         </div>
       </div>
     );
@@ -52,60 +63,70 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
 };
 
 export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
+  const { theme } = useTheme();
+
   if (!customers || customers.length === 0) {
     return null;
   }
 
-  // Display top 10 customers
-  const chartData = customers.slice(0, 10);
+  // Display top 8 customers for optimal scannability
+  const chartData = customers.slice(0, 8);
+
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#71717a' : '#71717a';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)';
+  const barNeutral = isDark ? '#3f3f46' : '#a1a1aa';
+  const barWhale = '#f59e0b'; // Amber accent for top whale account
 
   return (
-    <section className="bg-dark-card border border-dark-border rounded-2xl p-6 mb-7 shadow-sm">
-      <div className="flex justify-between items-center mb-5">
+    <section className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-5 mb-6 transition-colors">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
         <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <svg className="w-5 h-5 stroke-cyan-400 fill-none stroke-2" viewBox="0 0 24 24">
-              <line x1="18" y1="20" x2="18" y2="10" />
-              <line x1="12" y1="20" x2="12" y2="4" />
-              <line x1="6" y1="20" x2="6" y2="14" />
-            </svg>
+          <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             Customer Cost Distribution
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Identifies high-expenditure customers eating into gross margins (Built with Recharts)
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Top accounts ranked by gross LLM expenditure • Amber indicates the primary whale account
           </p>
+        </div>
+        <div className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
+          Showing top {chartData.length} of {customers.length} accounts
         </div>
       </div>
 
-      <div className="w-full h-72">
+      <div className="w-full h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"
             data={chartData}
-            margin={{ top: 10, right: 30, left: 110, bottom: 5 }}
+            margin={{ top: 8, right: 30, left: 110, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" horizontal={false} />
+            <CartesianGrid strokeDasharray="2 2" stroke={gridColor} horizontal={false} />
             <XAxis
               type="number"
-              stroke="#94a3b8"
+              stroke={axisColor}
               tickFormatter={(val: number) => `$${val}`}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fontFamily: 'JetBrains Mono', fill: axisColor }}
+              axisLine={{ stroke: gridColor }}
+              tickLine={{ stroke: gridColor }}
             />
             <YAxis
               type="category"
               dataKey="customerId"
-              stroke="#cbd5e1"
-              tick={{ fontFamily: 'JetBrains Mono', fontSize: 11, fill: '#cbd5e1' }}
-              width={100}
+              stroke={axisColor}
+              tick={{ fontFamily: 'JetBrains Mono', fontSize: 11, fill: axisColor }}
+              width={105}
+              axisLine={{ stroke: gridColor }}
+              tickLine={{ stroke: gridColor }}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="totalCost" radius={[0, 6, 6, 0]} barSize={20}>
-              {chartData.map((_, index) => {
-                let fill = '#6366f1'; // Indigo default
-                if (index === 0) fill = '#f43f5e'; // Rose for #1
-                else if (index === 1) fill = '#f59e0b'; // Amber for #2
-                return <Cell key={`cell-${index}`} fill={fill} />;
-              })}
+            <Bar dataKey="totalCost" radius={[0, 4, 4, 0]} barSize={16}>
+              {chartData.map((_, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={index === 0 ? barWhale : barNeutral}
+                />
+              ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>

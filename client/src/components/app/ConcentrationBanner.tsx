@@ -20,56 +20,50 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
 
   return (
     <div
-      className={`rounded-2xl p-4 mb-7 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 backdrop-blur-md transition-all ${
+      className={`rounded-xl px-4 py-3 mb-6 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors ${
         isHighConcentration
-          ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+          ? 'bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200'
+          : 'bg-zinc-100/80 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
       }`}
     >
       <div className="flex items-center gap-3">
         <div
-          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-            isHighConcentration ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold font-mono ${
+            isHighConcentration
+              ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+              : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
           }`}
         >
-          {isHighConcentration ? (
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )}
+          {isHighConcentration ? '!' : 'i'}
         </div>
 
         <div>
-          <div className="text-xs font-bold uppercase tracking-wider">
-            {isHighConcentration ? 'Whale Concentration Risk Detected' : 'Diversified Unit Economics'}
+          <div className="text-xs font-semibold tracking-tight">
+            {isHighConcentration ? 'Whale Concentration Risk Detected' : 'Unit Economics Distribution'}
           </div>
           <div className="text-xs opacity-90 mt-0.5">
             {isHighConcentration ? (
               <>
-                Top {top3.length} accounts represent <strong>{concentrationPercent}%</strong> of your total token bill. Heavy accounts like <span className="font-mono font-bold text-white">{top3[0]?.customerId}</span> may require custom usage tiers.
+                Top {top3.length} accounts consume <strong>{concentrationPercent}%</strong> of your total token bill. Account <span className="font-mono font-bold">{top3[0]?.customerId}</span> accounts for {top3[0]?.percentOfTotal}% of total spend.
               </>
             ) : (
               <>
-                Your token expenditure is healthy and well-distributed across active customer accounts.
+                Token expenditure is diversified. Top {top3.length} accounts represent <strong>{concentrationPercent}%</strong> of total spend.
               </>
             )}
           </div>
         </div>
       </div>
 
-      <div className="shrink-0 text-right self-end sm:self-auto">
+      <div className="shrink-0 self-end sm:self-auto">
         <span
-          className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
+          className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded border tabular-nums ${
             isHighConcentration
-              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/40'
+              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/60'
           }`}
         >
-          {concentrationPercent}% Spend in Top 3
+          {concentrationPercent}% spend in Top 3
         </span>
       </div>
     </div>
