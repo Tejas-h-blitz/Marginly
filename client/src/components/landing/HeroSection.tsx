@@ -24,8 +24,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp, onOpenAut
   const isNegative = marginPercent < 0;
 
   return (
-    <section className="pt-28 pb-16 sm:pt-36 sm:pb-20">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+    <section className="min-h-[calc(100svh-3.5rem)] flex items-center pt-14 pb-8">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
           
           {/* Left Column: Clear Value Proposition */}

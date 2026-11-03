@@ -41,7 +41,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           borderRadius: '0.5rem'
         },
         elements: {
-          card: 'bg-transparent shadow-none border-0 p-0',
+          rootBox: 'w-full min-w-0',
+          cardBox: 'w-full min-w-0',
+          card: 'w-full min-w-0 bg-transparent shadow-none border-0 p-0',
           formButtonPrimary: 'bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs py-2 rounded-lg',
           socialButtonsBlockButton: 'bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs rounded-lg py-2',
           formFieldInput: 'bg-zinc-900/80 border border-zinc-800 text-xs rounded-lg px-3 py-2 text-zinc-100 focus:border-zinc-500',
@@ -60,7 +62,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           borderRadius: '0.5rem'
         },
         elements: {
-          card: 'bg-transparent shadow-none border-0 p-0',
+          rootBox: 'w-full min-w-0',
+          cardBox: 'w-full min-w-0',
+          card: 'w-full min-w-0 bg-transparent shadow-none border-0 p-0',
           formButtonPrimary: 'bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs py-2 rounded-lg',
           socialButtonsBlockButton: 'bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs rounded-lg py-2',
           formFieldInput: 'bg-zinc-50 border border-zinc-200 text-xs rounded-lg px-3 py-2 text-zinc-900 focus:border-zinc-400',
@@ -74,7 +78,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       {/* Click outside to close */}
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative w-full max-w-sm rounded-2xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 z-10 max-h-[90vh] overflow-y-auto">
+      <div className="auth-dialog relative w-full max-w-md rounded-2xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 z-10 max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -88,7 +92,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
         {clerkEnabled ? (
           /* Live Clerk Authentication Flow */
-          <div className="flex flex-col items-center space-y-3">
+          <div className="flex min-w-0 flex-col items-center space-y-3">
             {/* Mode Switcher */}
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-xs mb-1">
               <button
@@ -115,7 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               </button>
             </div>
 
-            <div className="w-full">
+            <div className="w-full min-w-0">
               {authMode === 'signin' ? (
                 <SignIn
                   routing="hash"

@@ -65,12 +65,6 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
               >
                 Sign In
               </button>
-              <button
-                onClick={onLaunchApp}
-                className="bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium px-3.5 py-1.5 rounded-md text-xs shadow-sm transition-all"
-              >
-                Sign In to Continue
-              </button>
             </>
           )}
         </div>
