@@ -1,43 +1,60 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useClerk, useUser } from '@clerk/react';
 import { User, Workspace } from '../types/index.js';
+import { isClerkConfigured } from './ClerkProviderWrapper.js';
 
 interface AuthContextType {
   user: User | null;
   workspace: Workspace;
   isAuthenticated: boolean;
-  loginAsDemo: () => void;
-  loginWithEmail: (email: string) => void;
-  logout: () => void;
-  setWorkspace: (ws: Workspace) => void;
+  logout: () => Promise<void>;
+  setWorkspace: (workspace: Workspace) => void;
 }
 
 const DEFAULT_WORKSPACE: Workspace = {
-  id: 'ws_prod',
-  name: 'Acme AI / Production',
-  tier: 'Pro'
-};
-
-const DEMO_USER: User = {
-  id: 'usr_founder_01',
-  name: 'Alex Vance',
-  email: 'alex@acme-ai.com',
-  role: 'Founder & CEO',
-  companyName: 'Acme AI, Inc.',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80'
+  id: 'ws_default',
+  name: 'My workspace',
+  tier: 'Free'
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const stored = localStorage.getItem('marginly_auth_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+interface AuthStateProps {
+  children: React.ReactNode;
+  workspace: Workspace;
+  setWorkspace: (workspace: Workspace) => void;
+}
 
+const ClerkAuthState: React.FC<AuthStateProps> = ({ children, workspace, setWorkspace }) => {
+  const { isSignedIn, user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+  const user: User | null = clerkUser
+    ? {
+        id: clerkUser.id,
+        name: clerkUser.fullName || clerkUser.firstName || 'Founder',
+        email: clerkUser.primaryEmailAddress?.emailAddress || '',
+        role: 'Founder',
+        companyName: workspace.name,
+        avatarUrl: clerkUser.imageUrl
+      }
+    : null;
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        workspace,
+        isAuthenticated: isSignedIn === true,
+        logout: () => signOut(),
+        setWorkspace
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [workspace, setWorkspace] = useState<Workspace>(() => {
     try {
       const stored = localStorage.getItem('marginly_workspace');
@@ -48,46 +65,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    if (user) {
-      localStorage.setItem('marginly_auth_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('marginly_auth_user');
-    }
-  }, [user]);
-
-  useEffect(() => {
+    localStorage.removeItem('marginly_auth_user');
     localStorage.setItem('marginly_workspace', JSON.stringify(workspace));
   }, [workspace]);
 
-  const loginAsDemo = () => {
-    setUser(DEMO_USER);
-  };
-
-  const loginWithEmail = (email: string) => {
-    const username = email.split('@')[0] || 'Founder';
-    const formattedName = username.charAt(0).toUpperCase() + username.slice(1);
-    setUser({
-      id: `usr_${Date.now()}`,
-      name: formattedName,
-      email: email,
-      role: 'Founder',
-      companyName: 'My SaaS Studio'
-    });
-  };
-
-  const logout = () => {
-    setUser(null);
-  };
+  if (isClerkConfigured()) {
+    return (
+      <ClerkAuthState workspace={workspace} setWorkspace={setWorkspace}>
+        {children}
+      </ClerkAuthState>
+    );
+  }
 
   return (
     <AuthContext.Provider
       value={{
-        user,
+        user: null,
         workspace,
-        isAuthenticated: !!user,
-        loginAsDemo,
-        loginWithEmail,
-        logout,
+        isAuthenticated: false,
+        logout: async () => {},
         setWorkspace
       }}
     >

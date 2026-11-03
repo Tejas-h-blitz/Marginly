@@ -7,16 +7,30 @@ interface ConcentrationBannerProps {
 }
 
 export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ customers, totalCost }) => {
-  if (!customers || customers.length < 2 || totalCost <= 0) {
+  if (!customers || customers.length < 8 || totalCost <= 0) {
     return null;
   }
 
   // Calculate top 3 concentration
   const top3 = customers.slice(0, 3);
   const top3Cost = top3.reduce((sum, c) => sum + c.totalCost, 0);
-  const concentrationPercent = Math.round((top3Cost / totalCost) * 100);
+  const rawShare = totalCost > 0 ? (top3Cost / totalCost) * 100 : 0;
 
-  const isHighConcentration = concentrationPercent >= 70;
+  // Format exact share: never rounded up to 100% unless mathematically >= 100%
+  const formattedShare = rawShare >= 100
+    ? '100%'
+    : rawShare >= 99.95
+    ? '99.9%'
+    : `${Number(rawShare.toFixed(1))}%`;
+
+  const top1Share = top3[0] && totalCost > 0 ? (top3[0].totalCost / totalCost) * 100 : 0;
+  const formattedTop1Share = top1Share >= 100
+    ? '100%'
+    : top1Share >= 99.95
+    ? '99.9%'
+    : `${Number(top1Share.toFixed(1))}%`;
+
+  const isHighConcentration = rawShare >= 70;
 
   return (
     <div
@@ -44,11 +58,11 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
           <div className="text-xs opacity-90 mt-0.5">
             {isHighConcentration ? (
               <>
-                Top {top3.length} accounts consume <strong>{concentrationPercent}%</strong> of your total token bill. Account <span className="font-mono font-bold">{top3[0]?.customerId}</span> accounts for {top3[0]?.percentOfTotal}% of total spend.
+                Top {top3.length} accounts consume <strong>{formattedShare}</strong> of your total token bill. Account <span className="font-mono font-bold">{top3[0]?.customerId}</span> accounts for {formattedTop1Share} of total spend.
               </>
             ) : (
               <>
-                Token expenditure is diversified. Top {top3.length} accounts represent <strong>{concentrationPercent}%</strong> of total spend.
+                Token expenditure is diversified. Top {top3.length} accounts represent <strong>{formattedShare}</strong> of total spend.
               </>
             )}
           </div>
@@ -63,7 +77,7 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
               : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/60'
           }`}
         >
-          {concentrationPercent}% spend in Top 3
+          {formattedShare} spend in Top 3
         </span>
       </div>
     </div>

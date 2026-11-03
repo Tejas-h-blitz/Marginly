@@ -40,7 +40,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp, onOpenAut
             </h1>
 
             <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto lg:mx-0 font-normal leading-relaxed">
-              Marginly maps raw OpenAI and Anthropic API logs to customer accounts, calculating per-customer unit economics and margin risk in seconds.
+              Marginly maps raw OpenAI, Anthropic, and Google Gemini API logs to customer accounts, calculating per-customer unit economics and margin risk in seconds.
             </p>
 
             {/* Action Buttons */}
@@ -63,7 +63,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp, onOpenAut
 
             {/* Direct Feature List */}
             <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 text-xs font-mono text-zinc-500 dark:text-zinc-400">
-              <span>• OpenAI & Anthropic</span>
+              <span>• OpenAI, Anthropic & Google</span>
               <span>• CSV Ingestion</span>
               <span>• Export Reports</span>
             </div>

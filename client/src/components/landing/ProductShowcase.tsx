@@ -52,7 +52,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onLaunchApp })
             <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-lg p-3">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Active Customers</div>
               <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mt-0.5 tabular-nums">14 accounts</div>
-              <div className="text-[10px] text-zinc-400 mt-0.5">Tracked tenants</div>
+              <div className="text-[10px] text-zinc-400 mt-0.5">Tracked customers</div>
             </div>
             <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-lg p-3">
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Tokens Processed</div>

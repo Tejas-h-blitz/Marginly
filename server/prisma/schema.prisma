@@ -9,7 +9,7 @@ generator client {
 
 model Customer {
   id           String        @id @default(uuid())
-  userId       String        @default("demo-user") @map("user_id")
+  userId       String        @map("user_id")
   customerId   String        @map("customer_id")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
@@ -22,17 +22,13 @@ model Customer {
 
 model UsageRecord {
   id           String    @id @default(uuid())
-  userId       String    @default("demo-user") @map("user_id")
+  userId       String    @map("user_id")
   customerId   String    @map("customer_id")
   customer     Customer  @relation(fields: [userId, customerId], references: [userId, customerId], onDelete: Cascade)
   timestamp    DateTime?
   modelName    String    @map("model_name")
   inputTokens  Int       @map("input_tokens")
   outputTokens Int       @map("output_tokens")
-  totalTokens  Int       @map("total_tokens")
-  inputCost    Float     @map("input_cost")
-  outputCost   Float     @map("output_cost")
-  totalCost    Float     @map("total_cost")
   createdAt    DateTime  @default(now()) @map("created_at")
 
   @@index([userId])

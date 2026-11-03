@@ -6,6 +6,7 @@ import { LandingPage } from './components/landing/LandingPage.js';
 import { AuthModal } from './components/auth/AuthModal.js';
 import { AppNavbar } from './components/app/AppNavbar.js';
 import { ConcentrationBanner } from './components/app/ConcentrationBanner.js';
+import { UnpricedModelsWarning } from './components/app/UnpricedModelsWarning.js';
 import { ImportDrawer } from './components/app/ImportDrawer.js';
 import { KpiGrid } from './components/KpiGrid.js';
 import { CostChart } from './components/CostChart.js';
@@ -22,15 +23,17 @@ import {
 const INITIAL_SUMMARY: UsageSummary = {
   totalCustomers: 0,
   totalRequests: 0,
+  pricedRequests: 0,
   totalInputTokens: 0,
   totalOutputTokens: 0,
   totalTokens: 0,
   totalCost: 0,
-  topCustomer: null
+  topCustomer: null,
+  unpricedModels: []
 };
 
 function MainAppContent() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState<'landing' | 'app'>('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -54,21 +57,16 @@ function MainAppContent() {
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
-        if ((window as any).Clerk.user?.id) {
-          headers['x-user-id'] = (window as any).Clerk.user.id;
-        }
       }
     } catch {
       // Fallback
     }
 
-    if (!headers['Authorization'] && user?.id) {
-      headers['x-user-id'] = user.id;
-    }
     return headers;
-  }, [user]);
+  }, []);
 
   const loadData = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
       const authHeaders = await getAuthHeaders();
       const [summaryRes, customersRes] = await Promise.all([
@@ -88,11 +86,13 @@ function MainAppContent() {
     } catch (err) {
       console.error('Failed to load usage data:', err);
     }
-  }, [getAuthHeaders]);
+  }, [getAuthHeaders, isAuthenticated]);
 
   const loadPricing = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
-      const res = await fetch('/api/pricing');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/pricing', { headers: authHeaders });
       if (res.ok) {
         const data: PricingResponse = await res.json();
         setPricing(data.models);
@@ -100,12 +100,20 @@ function MainAppContent() {
     } catch (err) {
       console.error('Failed to load pricing:', err);
     }
-  }, []);
+  }, [getAuthHeaders, isAuthenticated]);
 
   useEffect(() => {
     loadData();
     loadPricing();
   }, [loadData, loadPricing]);
+
+  const handleLaunchApp = () => {
+    if (isAuthenticated) {
+      setCurrentView('app');
+    } else {
+      setIsAuthModalOpen(true);
+    }
+  };
 
   const handleLoadSample = async () => {
     setLoading(true);
@@ -221,7 +229,7 @@ function MainAppContent() {
     <>
       {currentView === 'landing' ? (
         <LandingPage
-          onLaunchApp={() => setCurrentView('app')}
+          onLaunchApp={handleLaunchApp}
           onOpenAuth={() => setIsAuthModalOpen(true)}
           isAuthenticated={isAuthenticated}
         />
@@ -293,6 +301,8 @@ function MainAppContent() {
               customers={customers}
               totalCost={summary.totalCost}
             />
+
+            <UnpricedModelsWarning models={summary.unpricedModels} />
 
             {/* KPI Cards */}
             <KpiGrid summary={summary} />

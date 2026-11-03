@@ -18,18 +18,20 @@ export interface CalculatedRecord {
   customerId: string;
   timestamp: Date | null;
   modelName: string;
-  resolvedModel: string;
+  resolvedModel: string | null;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-  inputCost: number;
-  outputCost: number;
-  totalCost: number;
+  inputCost: number | null;
+  outputCost: number | null;
+  totalCost: number | null;
+  unpriced: boolean;
 }
 
 export interface CustomerBreakdown {
   customerId: string;
   totalRequests: number;
+  pricedRequests: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
@@ -41,6 +43,7 @@ export interface CustomerBreakdown {
 export interface UsageSummary {
   totalCustomers: number;
   totalRequests: number;
+  pricedRequests: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
@@ -49,6 +52,10 @@ export interface UsageSummary {
     customerId: string;
     cost: number;
   } | null;
+  unpricedModels: Array<{
+    modelName: string;
+    requestCount: number;
+  }>;
 }
 
 export interface PastePayload {

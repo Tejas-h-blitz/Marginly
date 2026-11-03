@@ -38,7 +38,7 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
     }
 
     const modelRaw = extractField(r as Record<string, unknown>, ['model_name', 'modelName', 'model']);
-    const modelName = modelRaw ? String(modelRaw).trim() : 'default';
+    const modelName = modelRaw ? String(modelRaw).trim() : '(missing model name)';
 
     const inputTokensRaw = extractField(r as Record<string, unknown>, ['input_tokens', 'inputTokens', 'prompt_tokens', 'input']) ?? 0;
     const outputTokensRaw = extractField(r as Record<string, unknown>, ['output_tokens', 'outputTokens', 'completion_tokens', 'output']) ?? 0;
@@ -48,8 +48,10 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
     const totalTokens = inputTokens + outputTokens;
 
     const resolvedModel = normalizeModelName(modelName, pricingKeys);
-    const modelPricing = pricingMap[resolvedModel] || pricingMap['default'];
-    const { inputCost, outputCost, totalCost } = calculateCost(inputTokens, outputTokens, modelPricing);
+    const modelPricing = resolvedModel ? pricingMap[resolvedModel] : undefined;
+    const costs = modelPricing
+      ? calculateCost(inputTokens, outputTokens, modelPricing)
+      : { inputCost: null, outputCost: null, totalCost: null };
 
     processed.push({
       customerId,
@@ -59,16 +61,15 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
       inputTokens,
       outputTokens,
       totalTokens,
-      inputCost,
-      outputCost,
-      totalCost
+      ...costs,
+      unpriced: !modelPricing
     });
   }
 
   return processed;
 }
 
-export async function saveRecords(records: CalculatedRecord[], userId: string = 'demo-user'): Promise<number> {
+export async function saveRecords(records: CalculatedRecord[], userId: string): Promise<number> {
   if (records.length === 0) return 0;
 
   // Group unique customer IDs to upsert
@@ -100,11 +101,7 @@ export async function saveRecords(records: CalculatedRecord[], userId: string = 
         timestamp: r.timestamp,
         modelName: r.modelName,
         inputTokens: r.inputTokens,
-        outputTokens: r.outputTokens,
-        totalTokens: r.totalTokens,
-        inputCost: r.inputCost,
-        outputCost: r.outputCost,
-        totalCost: r.totalCost
+        outputTokens: r.outputTokens
       }))
     });
   });
@@ -144,122 +141,109 @@ export function parseJson(jsonTextOrData: unknown): RawUsageInput[] {
   return data as RawUsageInput[];
 }
 
-export async function getCustomersBreakdown(userId: string = 'demo-user'): Promise<CustomerBreakdown[]> {
-  const records = await db.usageRecord.findMany({
-    where: { userId },
-    select: {
-      customerId: true,
-      inputTokens: true,
-      outputTokens: true,
-      totalTokens: true,
-      totalCost: true
-    }
-  });
-
-  if (!records || records.length === 0) {
-    return [];
-  }
-
-  // Aggregate by customerId
+export async function getCustomersBreakdown(userId: string): Promise<CustomerBreakdown[]> {
+  const [records, pricing] = await Promise.all([
+    db.usageRecord.findMany({ where: { userId } }),
+    getActivePricing()
+  ]);
+  const pricingKeys = Object.keys(pricing);
   const customerMap = new Map<string, {
     totalRequests: number;
+    pricedRequests: number;
     totalInputTokens: number;
     totalOutputTokens: number;
     totalTokens: number;
     totalCost: number;
   }>();
 
-  let overallTotalCost = 0;
-
-  for (const r of records) {
-    const existing = customerMap.get(r.customerId) || {
+  for (const record of records) {
+    const data = customerMap.get(record.customerId) ?? {
       totalRequests: 0,
+      pricedRequests: 0,
       totalInputTokens: 0,
       totalOutputTokens: 0,
       totalTokens: 0,
       totalCost: 0
     };
+    data.totalRequests += 1;
+    data.totalInputTokens += record.inputTokens;
+    data.totalOutputTokens += record.outputTokens;
+    data.totalTokens += record.inputTokens + record.outputTokens;
 
-    existing.totalRequests += 1;
-    existing.totalInputTokens += r.inputTokens;
-    existing.totalOutputTokens += r.outputTokens;
-    existing.totalTokens += r.totalTokens;
-    existing.totalCost += r.totalCost;
-    overallTotalCost += r.totalCost;
+    const resolvedModel = normalizeModelName(record.modelName, pricingKeys);
+    const modelPricing = resolvedModel ? pricing[resolvedModel] : undefined;
+    if (modelPricing) {
+      // Price versioning with effective dates is the proper long-term fix for historical bills.
+      data.pricedRequests += 1;
+      data.totalCost += calculateCost(record.inputTokens, record.outputTokens, modelPricing).totalCost;
+    }
 
-    customerMap.set(r.customerId, existing);
+    customerMap.set(record.customerId, data);
   }
 
-  const result: CustomerBreakdown[] = [];
-  for (const [customerId, data] of customerMap.entries()) {
-    const roundedCost = Number(data.totalCost.toFixed(4));
-    const avgCost = data.totalRequests > 0 ? Number((data.totalCost / data.totalRequests).toFixed(5)) : 0;
-    const pct = overallTotalCost > 0 ? Number(((data.totalCost / overallTotalCost) * 100).toFixed(1)) : 0;
+  const overallTotalCost = Array.from(customerMap.values())
+    .reduce((sum, data) => sum + data.totalCost, 0);
 
-    result.push({
-      customerId,
-      totalRequests: data.totalRequests,
-      totalInputTokens: data.totalInputTokens,
-      totalOutputTokens: data.totalOutputTokens,
-      totalTokens: data.totalTokens,
-      totalCost: roundedCost,
-      avgCostPerRequest: avgCost,
-      percentOfTotal: pct
-    });
-  }
-
-  // Sort by totalCost descending
-  result.sort((a, b) => b.totalCost - a.totalCost);
-  return result;
+  return Array.from(customerMap, ([customerId, data]) => ({
+    customerId,
+    totalRequests: data.totalRequests,
+    pricedRequests: data.pricedRequests,
+    totalInputTokens: data.totalInputTokens,
+    totalOutputTokens: data.totalOutputTokens,
+    totalTokens: data.totalTokens,
+    totalCost: data.totalCost,
+    avgCostPerRequest: data.pricedRequests > 0 ? data.totalCost / data.pricedRequests : 0,
+    percentOfTotal: overallTotalCost > 0 ? (data.totalCost / overallTotalCost) * 100 : 0
+  })).sort((a, b) => b.totalCost - a.totalCost);
 }
 
-export async function getOverallSummary(userId: string = 'demo-user'): Promise<UsageSummary> {
-  const breakdown = await getCustomersBreakdown(userId);
+export async function getOverallSummary(userId: string): Promise<UsageSummary> {
+  const [breakdown, records, pricing] = await Promise.all([
+    getCustomersBreakdown(userId),
+    db.usageRecord.findMany({ where: { userId } }),
+    getActivePricing()
+  ]);
+  const pricingKeys = Object.keys(pricing);
+  const unpricedModelCounts = new Map<string, number>();
+  for (const record of records) {
+    if (!normalizeModelName(record.modelName, pricingKeys)) {
+      unpricedModelCounts.set(record.modelName, (unpricedModelCounts.get(record.modelName) ?? 0) + 1);
+    }
+  }
 
-  if (breakdown.length === 0) {
-    return {
-      totalCustomers: 0,
-      totalRequests: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalTokens: 0,
-      totalCost: 0,
-      topCustomer: null
+  const summary: UsageSummary = {
+    totalCustomers: breakdown.length,
+    totalRequests: 0,
+    pricedRequests: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0,
+    totalCost: 0,
+    topCustomer: null,
+    unpricedModels: Array.from(unpricedModelCounts, ([modelName, requestCount]) => ({ modelName, requestCount }))
+      .sort((a, b) => a.modelName.localeCompare(b.modelName))
+  };
+
+  for (const customer of breakdown) {
+    summary.totalRequests += customer.totalRequests;
+    summary.pricedRequests += customer.pricedRequests;
+    summary.totalInputTokens += customer.totalInputTokens;
+    summary.totalOutputTokens += customer.totalOutputTokens;
+    summary.totalTokens += customer.totalTokens;
+    summary.totalCost += customer.totalCost;
+  }
+
+  if (breakdown.length > 0) {
+    summary.topCustomer = {
+      customerId: breakdown[0].customerId,
+      cost: breakdown[0].totalCost
     };
   }
 
-  const totalCustomers = breakdown.length;
-  let totalRequests = 0;
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let totalTokens = 0;
-  let totalCost = 0;
-
-  for (const c of breakdown) {
-    totalRequests += c.totalRequests;
-    totalInputTokens += c.totalInputTokens;
-    totalOutputTokens += c.totalOutputTokens;
-    totalTokens += c.totalTokens;
-    totalCost += c.totalCost;
-  }
-
-  const topCustomer = breakdown.length > 0 ? {
-    customerId: breakdown[0].customerId,
-    cost: breakdown[0].totalCost
-  } : null;
-
-  return {
-    totalCustomers,
-    totalRequests,
-    totalInputTokens,
-    totalOutputTokens,
-    totalTokens,
-    totalCost: Number(totalCost.toFixed(4)),
-    topCustomer
-  };
+  return summary;
 }
 
-export async function clearAllData(userId: string = 'demo-user'): Promise<void> {
+export async function clearAllData(userId: string): Promise<void> {
   await db.usageRecord.deleteMany({ where: { userId } });
   await db.customer.deleteMany({ where: { userId } });
 }

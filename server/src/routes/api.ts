@@ -23,52 +23,31 @@ const upload = multer({
 
 export const apiRouter = Router();
 
-/**
- * Extracts the tenant user ID strictly from authentication state (Clerk session or auth credentials),
- * NEVER trusting or accepting userId from client request body, query parameters, or params.
- */
-export function getAuthenticatedUserId(req: Request): string {
-  // 1. Clerk session via getAuth(req)
+export function getAuthenticatedUserId(req: Request): string | null {
   try {
-    const auth = getAuth(req);
-    if (auth && auth.userId) {
-      return auth.userId;
-    }
+    return getAuth(req).userId;
   } catch {
-    // getAuth throws if clerkMiddleware was not executed
-  }
-
-  // Check req.auth attached by Clerk middleware
-  const reqAuth = (req as any).auth;
-  if (typeof reqAuth === 'function') {
-    const a = reqAuth();
-    if (a?.userId) return a.userId;
-  } else if (reqAuth?.userId) {
-    return reqAuth.userId;
+    return null;
   }
 
   // 2. Authorization header for Bearer tokens or test isolation runs
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7).trim();
-    if (token) {
-      return token;
-    }
-  }
-
-  // 3. Authenticated test / demo session headers (for manual tests & demo founder pass)
-  const testUserId = req.headers['x-test-user-id'] || req.headers['x-demo-user-id'] || req.headers['x-user-id'];
-  if (typeof testUserId === 'string' && testUserId.trim()) {
-    return testUserId.trim();
-  }
-
-  return 'demo-user';
+  return null;
 }
+
+apiRouter.use((req: Request, res: Response, next) => {
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+  res.locals.userId = userId;
+  next();
+});
 
 // GET /api/summary
 apiRouter.get('/summary', async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     const summary = await getOverallSummary(userId);
     res.json(summary);
   } catch (err) {
@@ -80,7 +59,7 @@ apiRouter.get('/summary', async (req: Request, res: Response): Promise<void> => 
 // GET /api/customers
 apiRouter.get('/customers', async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     const breakdown = await getCustomersBreakdown(userId);
     res.json(breakdown);
   } catch (err) {
@@ -132,14 +111,16 @@ apiRouter.post('/upload', upload.single('file'), async (req: Request, res: Respo
       return;
     }
 
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     const inserted = await saveRecords(calculated, userId);
     const summary = await getOverallSummary(userId);
+    const unpricedRecords = calculated.filter(record => record.unpriced).length;
 
     res.json({
       success: true,
-      message: `Successfully ingested ${inserted} records from '${req.file.originalname}'.`,
+      message: `Successfully ingested ${inserted} records from '${req.file.originalname}'. ${unpricedRecords} records were unpriced.`,
       insertedRecords: inserted,
+      unpricedRecords,
       summary
     });
   } catch (err) {
@@ -177,14 +158,16 @@ apiRouter.post('/paste', async (req: Request<{}, {}, PastePayload>, res: Respons
       return;
     }
 
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     const inserted = await saveRecords(calculated, userId);
     const summary = await getOverallSummary(userId);
+    const unpricedRecords = calculated.filter(record => record.unpriced).length;
 
     res.json({
       success: true,
-      message: `Successfully ingested ${inserted} records.`,
+      message: `Successfully ingested ${inserted} records. ${unpricedRecords} records were unpriced.`,
       insertedRecords: inserted,
+      unpricedRecords,
       summary
     });
   } catch (err) {
@@ -219,14 +202,16 @@ apiRouter.post('/load-sample', async (req: Request, res: Response): Promise<void
     const content = fs.readFileSync(sampleFile, 'utf-8');
     const rawRows = parseCsv(content);
     const calculated = await processRawRecords(rawRows);
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     const inserted = await saveRecords(calculated, userId);
     const summary = await getOverallSummary(userId);
+    const unpricedRecords = calculated.filter(record => record.unpriced).length;
 
     res.json({
       success: true,
-      message: `Successfully loaded ${inserted} sample records across 8 customer accounts.`,
+      message: `Successfully loaded ${inserted} sample records. ${unpricedRecords} records were unpriced.`,
       insertedRecords: inserted,
+      unpricedRecords,
       summary
     });
   } catch (err) {
@@ -238,7 +223,7 @@ apiRouter.post('/load-sample', async (req: Request, res: Response): Promise<void
 // POST /api/clear
 apiRouter.post('/clear', async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     await clearAllData(userId);
     res.json({ success: true, message: 'All usage data cleared successfully.' });
   } catch (err) {
@@ -250,7 +235,7 @@ apiRouter.post('/clear', async (req: Request, res: Response): Promise<void> => {
 // GET /api/export
 apiRouter.get('/export', async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const userId = res.locals.userId;
     const customers = await getCustomersBreakdown(userId);
     const csvData = generateCustomerBreakdownCsv(customers);
 

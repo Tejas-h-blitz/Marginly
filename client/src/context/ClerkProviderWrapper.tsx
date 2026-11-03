@@ -6,7 +6,7 @@ const CLERK_PUBLISHABLE_KEY =
   (typeof import.meta !== 'undefined' &&
     ((import.meta as any).env?.VITE_CLERK_PUBLISHABLE_KEY ||
      (import.meta as any).env?.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)) ||
-  'pk_test_YWNjZXB0ZWQtbW9sbHVzay0yNTQ2LmNsZXJrLmFjY291bnRzLmRldiQ';
+  '';
 
 export const isClerkConfigured = (): boolean => {
   return typeof CLERK_PUBLISHABLE_KEY === 'string' && CLERK_PUBLISHABLE_KEY.trim().startsWith('pk_');

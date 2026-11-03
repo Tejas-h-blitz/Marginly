@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SignIn, SignUp } from '@clerk/react';
 import { dark } from '@clerk/themes';
 import { useAuth } from '../../context/AuthContext.js';
@@ -12,27 +12,19 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { loginAsDemo, loginWithEmail } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { theme } = useTheme();
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [emailInput, setEmailInput] = useState('');
   const clerkEnabled = isClerkConfigured();
 
+  useEffect(() => {
+    if (isOpen && isAuthenticated) {
+      onSuccess();
+      onClose();
+    }
+  }, [isAuthenticated, isOpen, onClose, onSuccess]);
+
   if (!isOpen) return null;
-
-  const handleDemoLogin = () => {
-    loginAsDemo();
-    onSuccess();
-    onClose();
-  };
-
-  const handleManualEmail = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emailInput.trim()) return;
-    loginWithEmail(emailInput.trim());
-    onSuccess();
-    onClose();
-  };
 
   const isDark = theme === 'dark';
 
@@ -139,59 +131,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               )}
             </div>
 
-            <div className="w-full pt-3 border-t border-zinc-100 dark:border-zinc-800 text-center">
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                className="text-xs font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                ⚡ Test instantly with Demo Founder Pass
-              </button>
-            </div>
           </div>
         ) : (
-          /* Standalone / Demo Login Form */
-          <div className="space-y-4">
+          <div className="space-y-4 text-center">
             <div className="text-center space-y-1">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                Sign in to Marginly
+                Authentication is not configured
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Unit economics & margin tracking for founders.
+                Set the Clerk publishable and secret keys to sign in securely.
               </p>
-            </div>
-
-            <form onSubmit={handleManualEmail} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Work Email
-                </label>
-                <input
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="alex@acme-ai.com"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-zinc-400"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium py-1.5 rounded-lg text-xs transition-colors"
-              >
-                Continue with Email
-              </button>
-            </form>
-
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 text-center">
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                className="text-xs font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-              >
-                ⚡ Launch Instant Demo Pass
-              </button>
             </div>
           </div>
         )}

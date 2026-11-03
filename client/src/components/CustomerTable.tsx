@@ -182,7 +182,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
                 </div>
               </th>
               <th className="py-2.5 px-3.5 w-36">Spend Share</th>
-              <th className="py-2.5 px-3.5 text-right">Avg / Req</th>
+              <th className="py-2.5 px-3.5 text-right">Avg / Priced Req</th>
               <th
                 onClick={() => handleSort('totalCost')}
                 className="py-2.5 px-3.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-right"

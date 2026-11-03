@@ -26,11 +26,13 @@ import { clerkMiddleware } from '@clerk/express';
 if (!process.env.CLERK_PUBLISHABLE_KEY) {
   process.env.CLERK_PUBLISHABLE_KEY =
     process.env.VITE_CLERK_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-    'pk_test_YWNjZXB0ZWQtbW9sbHVzay0yNTQ2LmNsZXJrLmFjY291bnRzLmRldiQ';
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 }
 
-if (process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY.trim().startsWith('sk_')) {
+if (
+  process.env.CLERK_SECRET_KEY?.trim().startsWith('sk_') &&
+  process.env.CLERK_PUBLISHABLE_KEY?.trim().startsWith('pk_')
+) {
   try {
     app.use(clerkMiddleware({
       publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
@@ -40,6 +42,8 @@ if (process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY.trim().startsWi
   } catch (err) {
     console.warn('[Auth] Clerk middleware warning:', err);
   }
+} else {
+  console.warn('[Auth] Clerk keys are missing or invalid; all /api routes will return 401.');
 }
 
 // API Routes
@@ -68,7 +72,7 @@ async function startServer() {
 
   server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n============================================================`);
-    console.log(`  AI Usage Cost Tracker - Express Backend running on port ${PORT}`);
+    console.log(`  Marginly - Express Backend running on port ${PORT}`);
     console.log(`  App Ready at: http://localhost:${PORT}`);
     console.log(`  API Ready at: http://localhost:${PORT}/api`);
     console.log(`============================================================\n`);

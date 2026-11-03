@@ -12,15 +12,21 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
     return val.toLocaleString();
   };
 
-  const avgCostPerReq = summary.totalRequests > 0
-    ? (summary.totalCost / summary.totalRequests)
+  const avgCostPerReq = summary.pricedRequests > 0
+    ? (summary.totalCost / summary.pricedRequests)
     : 0;
 
-  const topCustomerSpendShare = summary.topCustomer && summary.totalCost > 0
-    ? Math.round((summary.topCustomer.cost / summary.totalCost) * 100)
+  const topCustomerShareRaw = summary.topCustomer && summary.totalCost > 0
+    ? (summary.topCustomer.cost / summary.totalCost) * 100
     : 0;
 
-  const isWhaleDominant = topCustomerSpendShare >= 40;
+  const topCustomerSpendShare = topCustomerShareRaw >= 100
+    ? '100%'
+    : topCustomerShareRaw >= 99.95
+    ? '99.9%'
+    : `${Number(topCustomerShareRaw.toFixed(1))}%`;
+
+  const isWhaleDominant = topCustomerShareRaw >= 40;
 
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
@@ -55,7 +61,7 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
             </span>
             {isWhaleDominant && (
               <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50">
-                {topCustomerSpendShare}% spend
+                {topCustomerSpendShare} spend
               </span>
             )}
           </div>
@@ -78,7 +84,7 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
             <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Active Accounts
             </span>
-            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Tenants</span>
+            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Customers</span>
           </div>
           <div className="text-2xl font-semibold font-mono tabular-nums tracking-tight text-zinc-950 dark:text-zinc-50">
             {summary.totalCustomers.toLocaleString()}
@@ -112,7 +118,7 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Avg Cost / Req
+              Avg Cost / Priced Req
             </span>
             <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Unit</span>
           </div>
@@ -121,7 +127,7 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
           </div>
         </div>
         <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono tabular-nums">
-          Across {summary.totalRequests.toLocaleString()} logged calls
+          Across {summary.pricedRequests.toLocaleString()} priced calls
         </div>
       </div>
     </section>

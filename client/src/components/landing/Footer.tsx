@@ -25,7 +25,7 @@ export const Footer: React.FC<FooterProps> = ({ onLaunchApp, onOpenAuth }) => {
             onClick={onLaunchApp}
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-medium"
           >
-            Launch Demo
+            Open Marginly
           </button>
           <button
             onClick={onOpenAuth}

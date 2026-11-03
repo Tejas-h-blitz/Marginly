@@ -19,10 +19,23 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
   onBackToLanding,
   totalCustomers
 }) => {
-  const { user, workspace, logout } = useAuth();
+  const { user, workspace } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
+
+  const clerkUser = (typeof window !== 'undefined' && (window as any).Clerk?.user) || null;
+  const signedInName =
+    clerkUser?.fullName ||
+    clerkUser?.firstName ||
+    clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+    user?.name;
+
+  const workspaceDisplayName =
+    signedInName && signedInName !== 'Acme AI / Production'
+      ? signedInName
+      : workspace?.name && workspace.name !== 'Acme AI / Production'
+      ? workspace.name
+      : 'My workspace';
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0c0d0f]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 px-4 sm:px-6 py-2.5 transition-colors">
@@ -60,10 +73,7 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/70 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="max-w-[120px] sm:max-w-none truncate text-[11px] font-mono">{workspace.name}</span>
-              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
-                ({workspace.tier})
-              </span>
+              <span className="max-w-[140px] sm:max-w-none truncate text-[11px] font-mono">{workspaceDisplayName}</span>
               <svg className="w-3 h-3 text-zinc-400 ml-0.5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
@@ -78,7 +88,7 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
                   onClick={() => setWorkspaceDropdownOpen(false)}
                   className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
                 >
-                  <span className="truncate">{workspace.name}</span>
+                  <span className="truncate">{workspaceDisplayName}</span>
                   <span className="text-zinc-600 dark:text-zinc-300 text-xs">✓</span>
                 </button>
               </div>
@@ -165,41 +175,7 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
                 }}
               />
             </div>
-          ) : (
-            <div className="relative ml-1">
-              <button
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-1.5 p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-              >
-                <div className="w-6 h-6 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold flex items-center justify-center">
-                  {user ? user.name.slice(0, 2).toUpperCase() : 'DF'}
-                </div>
-              </button>
-
-              {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 z-50">
-                  <div className="px-2.5 py-1.5 border-b border-zinc-100 dark:border-zinc-800/80 mb-1">
-                    <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                      {user ? user.name : 'Founder'}
-                    </div>
-                    <div className="text-[11px] text-zinc-500 font-mono truncate">
-                      {user ? user.email : 'alex@acme-ai.com'}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      logout();
-                      setProfileDropdownOpen(false);
-                      onBackToLanding();
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-xs text-rose-600 dark:text-rose-400 font-medium"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

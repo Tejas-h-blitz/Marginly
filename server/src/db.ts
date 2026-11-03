@@ -22,26 +22,14 @@ export interface IDatabase {
       modelName: string;
       inputTokens: number;
       outputTokens: number;
-      totalTokens: number;
-      inputCost: number;
-      outputCost: number;
-      totalCost: number;
     }> }): Promise<{ count: number }>;
     findMany(args?: {
       where?: { userId?: string };
-      select?: {
-        customerId?: boolean;
-        inputTokens?: boolean;
-        outputTokens?: boolean;
-        totalTokens?: boolean;
-        totalCost?: boolean;
-      };
     }): Promise<Array<{
       customerId: string;
+      modelName: string;
       inputTokens: number;
       outputTokens: number;
-      totalTokens: number;
-      totalCost: number;
     }>>;
     deleteMany(args?: { where?: { userId?: string } }): Promise<unknown>;
   };
@@ -132,20 +120,8 @@ async function getPglite(): Promise<PGlite> {
       }
     }
 
-    // Ensure columns, constraints, and indexes exist idempotently
-    try {
-      await pgliteInstance.exec(`
-        ALTER TABLE customers ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'demo-user';
-        ALTER TABLE usage_records ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'demo-user';
-        DROP INDEX IF EXISTS customers_customer_id_key;
-        CREATE UNIQUE INDEX IF NOT EXISTS customers_user_id_customer_id_key ON customers(user_id, customer_id);
-        CREATE INDEX IF NOT EXISTS customers_user_id_idx ON customers(user_id);
-        CREATE INDEX IF NOT EXISTS usage_records_user_id_idx ON usage_records(user_id);
-        CREATE INDEX IF NOT EXISTS usage_records_user_id_customer_id_idx ON usage_records(user_id, customer_id);
-      `);
-    } catch {
-      // Ignored if already up to date
-    }
+    const recalculationMigration = path.resolve(__dirname, '../prisma/migrations/20261103000000_recalculate_costs_from_tokens/migration.sql');
+    await pgliteInstance.exec(fs.readFileSync(recalculationMigration, 'utf-8'));
   }
   return pgliteInstance;
 }
@@ -194,7 +170,7 @@ export const db: IDatabase = {
       }
       const pg = await getPglite();
       const id = crypto.randomUUID();
-      const userId = args.create.userId || 'demo-user';
+      const userId = args.create.userId;
       const customerId = args.create.customerId;
       await pg.query(`
         INSERT INTO customers (id, user_id, customer_id, updated_at)
@@ -224,13 +200,12 @@ export const db: IDatabase = {
       const pg = await getPglite();
       for (const r of args.data) {
         const id = crypto.randomUUID();
-        const userId = r.userId || 'demo-user';
+        const userId = r.userId;
         await pg.query(`
           INSERT INTO usage_records (
             id, user_id, customer_id, timestamp, model_name,
-            input_tokens, output_tokens, total_tokens,
-            input_cost, output_cost, total_cost
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+            input_tokens, output_tokens
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7);
         `, [
           id,
           userId,
@@ -238,11 +213,7 @@ export const db: IDatabase = {
           r.timestamp ? r.timestamp.toISOString() : null,
           r.modelName,
           r.inputTokens,
-          r.outputTokens,
-          r.totalTokens,
-          r.inputCost,
-          r.outputCost,
-          r.totalCost
+          r.outputTokens
         ]);
       }
       return { count: args.data.length };
@@ -258,27 +229,24 @@ export const db: IDatabase = {
       if (userId) {
         res = await pg.query<{
           customer_id: string;
+          model_name: string;
           input_tokens: number;
           output_tokens: number;
-          total_tokens: number;
-          total_cost: number;
-        }>('SELECT customer_id, input_tokens, output_tokens, total_tokens, total_cost FROM usage_records WHERE user_id = $1;', [userId]);
+        }>('SELECT customer_id, model_name, input_tokens, output_tokens FROM usage_records WHERE user_id = $1;', [userId]);
       } else {
         res = await pg.query<{
           customer_id: string;
+          model_name: string;
           input_tokens: number;
           output_tokens: number;
-          total_tokens: number;
-          total_cost: number;
-        }>('SELECT customer_id, input_tokens, output_tokens, total_tokens, total_cost FROM usage_records;');
+        }>('SELECT customer_id, model_name, input_tokens, output_tokens FROM usage_records;');
       }
 
       return res.rows.map(r => ({
         customerId: r.customer_id,
+        modelName: r.model_name,
         inputTokens: Number(r.input_tokens),
-        outputTokens: Number(r.output_tokens),
-        totalTokens: Number(r.total_tokens),
-        totalCost: Number(r.total_cost)
+        outputTokens: Number(r.output_tokens)
       }));
     },
 
