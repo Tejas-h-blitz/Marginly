@@ -1,7 +1,9 @@
+import { Prisma } from '@prisma/client';
 import { parse } from 'csv-parse/sync';
 import { db } from '../db.js';
-import { getActivePricing, normalizeModelName, calculateCost } from './pricingService.js';
+import { getActivePricing, normalizeModelName } from './pricingService.js';
 import { RawUsageInput, CalculatedRecord, CustomerBreakdown, UsageSummary } from '../types/index.js';
+import { calculateTokenCost, monthDateRange, Money, toMoneyString, zeroMoney } from './money.js';
 
 function extractField(row: Record<string, unknown>, candidateKeys: string[]): unknown {
   const normalizedRow: Record<string, unknown> = {};
@@ -49,10 +51,6 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
 
     const resolvedModel = normalizeModelName(modelName, pricingKeys);
     const modelPricing = resolvedModel ? pricingMap[resolvedModel] : undefined;
-    const costs = modelPricing
-      ? calculateCost(inputTokens, outputTokens, modelPricing)
-      : { inputCost: null, outputCost: null, totalCost: null };
-
     processed.push({
       customerId,
       timestamp,
@@ -61,7 +59,6 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
       inputTokens,
       outputTokens,
       totalTokens,
-      ...costs,
       unpriced: !modelPricing
     });
   }
@@ -141,106 +138,212 @@ export function parseJson(jsonTextOrData: unknown): RawUsageInput[] {
   return data as RawUsageInput[];
 }
 
-export async function getCustomersBreakdown(userId: string): Promise<CustomerBreakdown[]> {
-  const [records, pricing] = await Promise.all([
+interface CustomerTotals {
+  totalRequests: number;
+  pricedRequests: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  totalCost: Money;
+}
+
+interface DashboardData {
+  customers: CustomerBreakdown[];
+  summary: UsageSummary;
+}
+
+async function getDashboardData(userId: string, requestedMonth?: string): Promise<DashboardData> {
+  const [allRecords, storedCustomers, pricing] = await Promise.all([
     db.usageRecord.findMany({ where: { userId } }),
+    db.customer.findMany({ where: { userId } }),
     getActivePricing()
   ]);
+  const availableMonths = Array.from(new Set(
+    allRecords.flatMap(record => record.timestamp ? [record.timestamp.toISOString().slice(0, 7)] : [])
+  )).sort();
+  const month = requestedMonth ?? availableMonths[availableMonths.length - 1] ?? 'all';
+  const dateRange = month === 'all' ? null : monthDateRange(month);
+  const periodRecords = month === 'all'
+    ? allRecords
+    : allRecords.filter(record => record.timestamp && dateRange &&
+      record.timestamp >= dateRange.gte && record.timestamp < dateRange.lt);
   const pricingKeys = Object.keys(pricing);
-  const customerMap = new Map<string, {
-    totalRequests: number;
-    pricedRequests: number;
-    totalInputTokens: number;
-    totalOutputTokens: number;
-    totalTokens: number;
-    totalCost: number;
-  }>();
+  const totalsByCustomer = new Map<string, CustomerTotals>();
+  const unpricedModelCounts = new Map<string, number>();
+  let pricedRequests = 0;
 
-  for (const record of records) {
-    const data = customerMap.get(record.customerId) ?? {
+  for (const customer of storedCustomers) {
+    totalsByCustomer.set(customer.customerId, {
       totalRequests: 0,
       pricedRequests: 0,
       totalInputTokens: 0,
       totalOutputTokens: 0,
       totalTokens: 0,
-      totalCost: 0
-    };
-    data.totalRequests += 1;
-    data.totalInputTokens += record.inputTokens;
-    data.totalOutputTokens += record.outputTokens;
-    data.totalTokens += record.inputTokens + record.outputTokens;
+      totalCost: zeroMoney()
+    });
+  }
+
+  for (const record of periodRecords) {
+    const totals = totalsByCustomer.get(record.customerId);
+    if (!totals) continue;
+
+    totals.totalRequests += 1;
+    totals.totalInputTokens += record.inputTokens;
+    totals.totalOutputTokens += record.outputTokens;
+    totals.totalTokens += record.inputTokens + record.outputTokens;
 
     const resolvedModel = normalizeModelName(record.modelName, pricingKeys);
     const modelPricing = resolvedModel ? pricing[resolvedModel] : undefined;
     if (modelPricing) {
-      // Price versioning with effective dates is the proper long-term fix for historical bills.
-      data.pricedRequests += 1;
-      data.totalCost += calculateCost(record.inputTokens, record.outputTokens, modelPricing).totalCost;
-    }
-
-    customerMap.set(record.customerId, data);
-  }
-
-  const overallTotalCost = Array.from(customerMap.values())
-    .reduce((sum, data) => sum + data.totalCost, 0);
-
-  return Array.from(customerMap, ([customerId, data]) => ({
-    customerId,
-    totalRequests: data.totalRequests,
-    pricedRequests: data.pricedRequests,
-    totalInputTokens: data.totalInputTokens,
-    totalOutputTokens: data.totalOutputTokens,
-    totalTokens: data.totalTokens,
-    totalCost: data.totalCost,
-    avgCostPerRequest: data.pricedRequests > 0 ? data.totalCost / data.pricedRequests : 0,
-    percentOfTotal: overallTotalCost > 0 ? (data.totalCost / overallTotalCost) * 100 : 0
-  })).sort((a, b) => b.totalCost - a.totalCost);
-}
-
-export async function getOverallSummary(userId: string): Promise<UsageSummary> {
-  const [breakdown, records, pricing] = await Promise.all([
-    getCustomersBreakdown(userId),
-    db.usageRecord.findMany({ where: { userId } }),
-    getActivePricing()
-  ]);
-  const pricingKeys = Object.keys(pricing);
-  const unpricedModelCounts = new Map<string, number>();
-  for (const record of records) {
-    if (!normalizeModelName(record.modelName, pricingKeys)) {
+      pricedRequests += 1;
+      totals.pricedRequests += 1;
+      // Price versioning with effective dates is the proper long-term fix for historical accuracy.
+      totals.totalCost = totals.totalCost.plus(
+        calculateTokenCost(record.inputTokens, record.outputTokens, modelPricing)
+      );
+    } else {
       unpricedModelCounts.set(record.modelName, (unpricedModelCounts.get(record.modelName) ?? 0) + 1);
     }
   }
 
-  const summary: UsageSummary = {
-    totalCustomers: breakdown.length,
-    totalRequests: 0,
-    pricedRequests: 0,
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalTokens: 0,
-    totalCost: 0,
-    topCustomer: null,
-    unpricedModels: Array.from(unpricedModelCounts, ([modelName, requestCount]) => ({ modelName, requestCount }))
-      .sort((a, b) => a.modelName.localeCompare(b.modelName))
-  };
+  const totalCost = Array.from(totalsByCustomer.values())
+    .reduce((sum, totals) => sum.plus(totals.totalCost), zeroMoney());
+  const customerBreakdown = storedCustomers.map(customer => {
+    const totals = totalsByCustomer.get(customer.customerId)!;
+    const revenue = customer.monthlyRevenueUsd === null
+      ? null
+      : new Prisma.Decimal(customer.monthlyRevenueUsd);
+    const margin = month === 'all' || revenue === null ? null : revenue.minus(totals.totalCost);
 
-  for (const customer of breakdown) {
-    summary.totalRequests += customer.totalRequests;
-    summary.pricedRequests += customer.pricedRequests;
-    summary.totalInputTokens += customer.totalInputTokens;
-    summary.totalOutputTokens += customer.totalOutputTokens;
-    summary.totalTokens += customer.totalTokens;
-    summary.totalCost += customer.totalCost;
-  }
-
-  if (breakdown.length > 0) {
-    summary.topCustomer = {
-      customerId: breakdown[0].customerId,
-      cost: breakdown[0].totalCost
+    return {
+      customerId: customer.customerId,
+      monthlyRevenueUsd: customer.monthlyRevenueUsd,
+      totalRequests: totals.totalRequests,
+      pricedRequests: totals.pricedRequests,
+      totalInputTokens: totals.totalInputTokens,
+      totalOutputTokens: totals.totalOutputTokens,
+      totalTokens: totals.totalTokens,
+      totalCost: toMoneyString(totals.totalCost),
+      avgCostPerRequest: toMoneyString(totals.pricedRequests
+        ? totals.totalCost.div(totals.pricedRequests)
+        : zeroMoney()),
+      percentOfTotal: toMoneyString(totalCost.isZero()
+        ? zeroMoney()
+        : totals.totalCost.mul(100).div(totalCost)),
+      marginUsd: margin === null ? null : toMoneyString(margin),
+      marginPercent: month === 'all' || revenue === null || revenue.isZero() || margin === null
+        ? null
+        : toMoneyString(margin.mul(100).div(revenue)),
+      unprofitable: margin !== null && margin.isNegative()
     };
-  }
+  }).sort((a, b) => {
+    const aCost = new Prisma.Decimal(a.totalCost);
+    const bCost = new Prisma.Decimal(b.totalCost);
+    return bCost.comparedTo(aCost);
+  });
 
-  return summary;
+  const totalRevenue = month === 'all'
+    ? null
+    : storedCustomers.reduce(
+      (sum, customer) => customer.monthlyRevenueUsd === null
+        ? sum
+        : sum.plus(customer.monthlyRevenueUsd),
+      zeroMoney()
+    );
+  const totalMargin = totalRevenue === null
+    ? null
+    : customerBreakdown.reduce(
+      (sum, customer) => customer.marginUsd === null ? sum : sum.plus(customer.marginUsd),
+      zeroMoney()
+    );
+  const totalRequests = periodRecords.length;
+  const unprofitableCustomers = month === 'all'
+    ? 0
+    : customerBreakdown.filter(customer => customer.unprofitable).length;
+  const topCustomer = customerBreakdown.find(customer => customer.totalRequests > 0);
+
+  return {
+    customers: customerBreakdown,
+    summary: {
+      month,
+      availableMonths,
+      untimestampedRequests: allRecords.filter(record => record.timestamp === null).length,
+      totalCustomers: storedCustomers.length,
+      totalRequests,
+      pricedRequests,
+      totalInputTokens: periodRecords.reduce((sum, record) => sum + record.inputTokens, 0),
+      totalOutputTokens: periodRecords.reduce((sum, record) => sum + record.outputTokens, 0),
+      totalTokens: periodRecords.reduce((sum, record) => sum + record.inputTokens + record.outputTokens, 0),
+      totalCost: toMoneyString(totalCost),
+      avgCostPerRequest: toMoneyString(pricedRequests > 0
+        ? totalCost.div(pricedRequests)
+        : zeroMoney()),
+      totalRevenueUsd: totalRevenue === null ? null : toMoneyString(totalRevenue),
+      totalMarginUsd: totalMargin === null ? null : toMoneyString(totalMargin),
+      blendedMarginPercent: totalRevenue === null || totalRevenue.isZero() || totalMargin === null
+        ? null
+        : toMoneyString(totalMargin.mul(100).div(totalRevenue)),
+      unprofitableCustomers,
+      topCustomer: topCustomer
+        ? { customerId: topCustomer.customerId, cost: topCustomer.totalCost }
+        : null,
+      unpricedModels: Array.from(unpricedModelCounts, ([modelName, requestCount]) => ({ modelName, requestCount }))
+        .sort((a, b) => a.modelName.localeCompare(b.modelName))
+    }
+  };
+}
+
+export async function getCustomersBreakdown(userId: string, month?: string): Promise<CustomerBreakdown[]> {
+  return (await getDashboardData(userId, month)).customers;
+}
+
+export async function getOverallSummary(userId: string, month?: string): Promise<UsageSummary> {
+  return (await getDashboardData(userId, month)).summary;
+}
+
+export async function getAvailableMonths(userId: string): Promise<string[]> {
+  const records = await db.usageRecord.findMany({ where: { userId } });
+  return Array.from(new Set(
+    records.flatMap(record => record.timestamp ? [record.timestamp.toISOString().slice(0, 7)] : [])
+  )).sort();
+}
+
+export async function updateCustomerRevenue(
+  userId: string,
+  customerId: string,
+  monthlyRevenueUsd: string | null
+): Promise<void> {
+  const result = await db.customer.updateMany({
+    where: { userId, customerId },
+    data: { monthlyRevenueUsd }
+  });
+  if (result.count === 0) {
+    throw new Error('Customer not found for this account.');
+  }
+}
+
+export async function importCustomerRevenue(
+  userId: string,
+  rows: Array<{ customerId: string; monthlyRevenueUsd: string }>
+): Promise<number> {
+  await db.$transaction(async tx => {
+    const customers = await tx.customer.findMany({ where: { userId } });
+    const ownedIds = new Set(customers.map(customer => customer.customerId));
+    const missingIds = Array.from(new Set(rows
+      .filter(row => !ownedIds.has(row.customerId))
+      .map(row => row.customerId)));
+    if (missingIds.length > 0) {
+      throw new Error(`Unknown customer IDs: ${missingIds.join(', ')}`);
+    }
+
+    for (const row of rows) {
+      await tx.customer.updateMany({
+        where: { userId, customerId: row.customerId },
+        data: { monthlyRevenueUsd: row.monthlyRevenueUsd }
+      });
+    }
+  });
+  return rows.length;
 }
 
 export async function clearAllData(userId: string): Promise<void> {

@@ -1,135 +1,113 @@
 import React from 'react';
 import { UsageSummary } from '../types/index.js';
+import { formatPercent, formatUsd } from '../money.js';
 
 interface KpiGridProps {
   summary: UsageSummary;
 }
 
+interface MetricCardProps {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: 'default' | 'negative';
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({ label, value, detail, tone = 'default' }) => (
+  <div className={`bg-white dark:bg-[#121316] border rounded-xl p-4 flex flex-col justify-between transition-colors ${
+    tone === 'negative'
+      ? 'border-rose-300 dark:border-rose-700/60'
+      : 'border-zinc-200/90 dark:border-zinc-800/80'
+  }`}>
+    <div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">{label}</div>
+      <div className={`text-2xl font-semibold font-mono tabular-nums tracking-tight ${
+        tone === 'negative' ? 'text-rose-700 dark:text-rose-300' : 'text-zinc-950 dark:text-zinc-50'
+      }`}>{value}</div>
+    </div>
+    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono">{detail}</div>
+  </div>
+);
+
 export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
-  const formatTokens = (val: number): string => {
-    if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(2)}M`;
-    if (val >= 1_000) return `${(val / 1_000).toFixed(1)}k`;
-    return val.toLocaleString();
+  const formatTokens = (value: number): string => {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+    return value.toLocaleString();
   };
+  const monthView = summary.month !== 'all';
 
-  const avgCostPerReq = summary.pricedRequests > 0
-    ? (summary.totalCost / summary.pricedRequests)
-    : 0;
-
-  const topCustomerShareRaw = summary.topCustomer && summary.totalCost > 0
-    ? (summary.topCustomer.cost / summary.totalCost) * 100
-    : 0;
-
-  const topCustomerSpendShare = topCustomerShareRaw >= 100
-    ? '100%'
-    : topCustomerShareRaw >= 99.95
-    ? '99.9%'
-    : `${Number(topCustomerShareRaw.toFixed(1))}%`;
-
-  const isWhaleDominant = topCustomerShareRaw >= 40;
+  if (monthView) {
+    return (
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <MetricCard
+          label="Monthly Revenue"
+          value={`$${formatUsd(summary.totalRevenueUsd, 2)}`}
+          detail="Customers with revenue entered"
+        />
+        <MetricCard
+          label="Total Priced Cost"
+          value={`$${formatUsd(summary.totalCost)}`}
+          detail={`${summary.pricedRequests.toLocaleString()} priced requests`}
+        />
+        <MetricCard
+          label="Blended Margin"
+          value={formatPercent(summary.blendedMarginPercent)}
+          detail={summary.totalMarginUsd === null ? 'No revenue entered' : `$${formatUsd(summary.totalMarginUsd)} margin`}
+          tone={summary.totalMarginUsd !== null && summary.totalMarginUsd.startsWith('-') ? 'negative' : 'default'}
+        />
+        <MetricCard
+          label="Unprofitable Customers"
+          value={summary.unprofitableCustomers.toLocaleString()}
+          detail="Revenue is below priced cost"
+          tone={summary.unprofitableCustomers > 0 ? 'negative' : 'default'}
+        />
+        <MetricCard
+          label="Active Accounts"
+          value={summary.totalCustomers.toLocaleString()}
+          detail="Customer IDs tracked"
+        />
+        <MetricCard
+          label="Token Volume"
+          value={formatTokens(summary.totalTokens)}
+          detail={`In ${formatTokens(summary.totalInputTokens)} • Out ${formatTokens(summary.totalOutputTokens)}`}
+        />
+        <MetricCard
+          label="Avg Cost / Priced Req"
+          value={`$${formatUsd(summary.avgCostPerRequest, 5)}`}
+          detail="Priced requests only"
+        />
+      </section>
+    );
+  }
 
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-      {/* 1. Total LLM Cost */}
-      <div className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-4 flex flex-col justify-between transition-colors">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Total LLM Cost
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">USD</span>
-          </div>
-          <div className="text-2xl font-semibold font-mono tabular-nums tracking-tight text-zinc-950 dark:text-zinc-50">
-            ${summary.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-          </div>
-        </div>
-        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono">
-          Cumulative gross expenditure
-        </div>
-      </div>
-
-      {/* 2. Top Spender / The Whale */}
-      <div className={`bg-white dark:bg-[#121316] border rounded-xl p-4 flex flex-col justify-between transition-colors ${
-        isWhaleDominant
-          ? 'border-amber-300 dark:border-amber-500/40 bg-amber-50/30 dark:bg-amber-950/10'
-          : 'border-zinc-200/90 dark:border-zinc-800/80'
-      }`}>
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Top Customer
-            </span>
-            {isWhaleDominant && (
-              <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50">
-                {topCustomerSpendShare} spend
-              </span>
-            )}
-          </div>
-          <div
-            className="text-base font-semibold font-mono tracking-tight text-zinc-950 dark:text-zinc-50 truncate"
-            title={summary.topCustomer ? summary.topCustomer.customerId : 'No data'}
-          >
-            {summary.topCustomer ? summary.topCustomer.customerId : '—'}
-          </div>
-        </div>
-        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono tabular-nums">
-          {summary.topCustomer ? `$${summary.topCustomer.cost.toFixed(4)} total cost` : 'No accounts ingested'}
-        </div>
-      </div>
-
-      {/* 3. Tracked Accounts */}
-      <div className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-4 flex flex-col justify-between transition-colors">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Active Accounts
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Customers</span>
-          </div>
-          <div className="text-2xl font-semibold font-mono tabular-nums tracking-tight text-zinc-950 dark:text-zinc-50">
-            {summary.totalCustomers.toLocaleString()}
-          </div>
-        </div>
-        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono">
-          Unique customer entities
-        </div>
-      </div>
-
-      {/* 4. Token Ingestion Volume */}
-      <div className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-4 flex flex-col justify-between transition-colors">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Token Volume
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Tokens</span>
-          </div>
-          <div className="text-2xl font-semibold font-mono tabular-nums tracking-tight text-zinc-950 dark:text-zinc-50">
-            {formatTokens(summary.totalTokens)}
-          </div>
-        </div>
-        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono tabular-nums truncate">
-          In: {formatTokens(summary.totalInputTokens)} • Out: {formatTokens(summary.totalOutputTokens)}
-        </div>
-      </div>
-
-      {/* 5. Unit Economics (Average Request Cost) */}
-      <div className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-4 flex flex-col justify-between transition-colors">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Avg Cost / Priced Req
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">Unit</span>
-          </div>
-          <div className="text-2xl font-semibold font-mono tabular-nums tracking-tight text-zinc-950 dark:text-zinc-50">
-            ${avgCostPerReq.toFixed(4)}
-          </div>
-        </div>
-        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono tabular-nums">
-          Across {summary.pricedRequests.toLocaleString()} priced calls
-        </div>
-      </div>
+      <MetricCard
+        label="Total LLM Cost"
+        value={`$${formatUsd(summary.totalCost)}`}
+        detail="Cumulative priced expenditure"
+      />
+      <MetricCard
+        label="Top Customer"
+        value={summary.topCustomer?.customerId ?? '—'}
+        detail={summary.topCustomer ? `$${formatUsd(summary.topCustomer.cost)} total cost` : 'No accounts ingested'}
+      />
+      <MetricCard
+        label="Active Accounts"
+        value={summary.totalCustomers.toLocaleString()}
+        detail="Customer IDs tracked"
+      />
+      <MetricCard
+        label="Token Volume"
+        value={formatTokens(summary.totalTokens)}
+        detail={`In ${formatTokens(summary.totalInputTokens)} • Out ${formatTokens(summary.totalOutputTokens)}`}
+      />
+      <MetricCard
+        label="Avg Cost / Priced Req"
+        value={`$${formatUsd(summary.avgCostPerRequest, 5)}`}
+        detail={`${summary.pricedRequests.toLocaleString()} priced requests`}
+      />
     </section>
   );
 };

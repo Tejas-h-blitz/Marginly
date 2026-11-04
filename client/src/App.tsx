@@ -21,13 +21,21 @@ import {
 } from './types/index.js';
 
 const INITIAL_SUMMARY: UsageSummary = {
+  month: 'all',
+  availableMonths: [],
+  untimestampedRequests: 0,
   totalCustomers: 0,
   totalRequests: 0,
   pricedRequests: 0,
+  avgCostPerRequest: '0',
   totalInputTokens: 0,
   totalOutputTokens: 0,
   totalTokens: 0,
-  totalCost: 0,
+  totalCost: '0',
+  totalRevenueUsd: null,
+  totalMarginUsd: null,
+  blendedMarginPercent: null,
+  unprofitableCustomers: 0,
   topCustomer: null,
   unpricedModels: []
 };
@@ -40,6 +48,7 @@ function MainAppContent() {
   const [isPricingOpen, setIsPricingOpen] = useState(false);
 
   const [summary, setSummary] = useState<UsageSummary>(INITIAL_SUMMARY);
+  const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
   const [customers, setCustomers] = useState<CustomerBreakdown[]>([]);
   const [pricing, setPricing] = useState<Record<string, ModelPricingItem> | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -69,14 +78,16 @@ function MainAppContent() {
     if (!isAuthenticated) return;
     try {
       const authHeaders = await getAuthHeaders();
+      const monthQuery = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : '';
       const [summaryRes, customersRes] = await Promise.all([
-        fetch('/api/summary', { headers: authHeaders }),
-        fetch('/api/customers', { headers: authHeaders })
+        fetch(`/api/summary${monthQuery}`, { headers: authHeaders }),
+        fetch(`/api/customers${monthQuery}`, { headers: authHeaders })
       ]);
 
       if (summaryRes.ok) {
         const sumData: UsageSummary = await summaryRes.json();
         setSummary(sumData);
+        if (selectedMonth === undefined) setSelectedMonth(sumData.month);
       }
 
       if (customersRes.ok) {
@@ -86,7 +97,7 @@ function MainAppContent() {
     } catch (err) {
       console.error('Failed to load usage data:', err);
     }
-  }, [getAuthHeaders, isAuthenticated]);
+  }, [getAuthHeaders, isAuthenticated, selectedMonth]);
 
   const loadPricing = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -139,19 +150,61 @@ function MainAppContent() {
   const handleExportCsv = async () => {
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/export', { headers: authHeaders });
+      const monthQuery = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : '';
+      const res = await fetch(`/api/export${monthQuery}`, { headers: authHeaders });
       if (!res.ok) throw new Error('Failed to export CSV');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'customer_cost_breakdown.csv';
+      a.download = 'customer_margin_breakdown.csv';
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Error exporting CSV', 'error');
+    }
+  };
+
+  const handleSaveRevenue = async (customerId: string, value: string | null): Promise<boolean> => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/customers/${encodeURIComponent(customerId)}/revenue`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ monthly_revenue_usd: value })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save monthly revenue.');
+      showAlert(`Monthly revenue saved for ${customerId}.`, 'success');
+      await loadData();
+      return true;
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to save monthly revenue.', 'error');
+      return false;
+    }
+  };
+
+  const handleRevenueImport = async (file: File) => {
+    setLoading(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/revenue/import', {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to import revenue CSV.');
+      showAlert(data.message, 'success');
+      await loadData();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to import revenue CSV.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -231,13 +284,11 @@ function MainAppContent() {
         <LandingPage
           onLaunchApp={handleLaunchApp}
           onOpenAuth={() => setIsAuthModalOpen(true)}
-          isAuthenticated={isAuthenticated}
         />
       ) : (
         <div className="min-h-screen bg-[#fbfbfb] dark:bg-[#0c0d0f] text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors">
           {/* Top Application Navbar */}
           <AppNavbar
-            onOpenImport={() => setIsImportOpen(true)}
             onOpenPricing={() => setIsPricingOpen(true)}
             onClearData={handleClearData}
             onBackToLanding={() => setCurrentView('landing')}
@@ -261,7 +312,20 @@ function MainAppContent() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+              <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto justify-end">
+                <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>Period</span>
+                  <select
+                    value={selectedMonth ?? summary.month}
+                    onChange={event => setSelectedMonth(event.target.value)}
+                    className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400"
+                  >
+                    <option value="all">All time</option>
+                    {summary.availableMonths.slice().reverse().map(month => (
+                      <option key={month} value={month}>{month}</option>
+                    ))}
+                  </select>
+                </label>
                 {summary.totalCustomers === 0 && (
                   <button
                     onClick={handleLoadSample}
@@ -296,13 +360,25 @@ function MainAppContent() {
               </div>
             </div>
 
+            {summary.month === 'all' && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 -mt-2">
+                All-time view shows costs only. Select a month to compare revenue and margin.
+              </p>
+            )}
+
+            {summary.untimestampedRequests > 0 && (
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+                {summary.untimestampedRequests.toLocaleString()} records have missing or invalid timestamps and are included only in All time.
+              </div>
+            )}
+
             {/* Pareto 80/20 Concentration Risk Alert */}
             <ConcentrationBanner
               customers={customers}
               totalCost={summary.totalCost}
             />
 
-            <UnpricedModelsWarning models={summary.unpricedModels} />
+            <UnpricedModelsWarning models={summary.unpricedModels} month={summary.month} />
 
             {/* KPI Cards */}
             <KpiGrid summary={summary} />
@@ -311,7 +387,12 @@ function MainAppContent() {
             <CostChart customers={customers} />
 
             {/* Customer Table with Sorting and Filter Pills */}
-            <CustomerTable customers={customers} loading={loading} />
+            <CustomerTable
+              customers={customers}
+              month={summary.month}
+              onSaveRevenue={handleSaveRevenue}
+              loading={loading}
+            />
           </main>
 
           {/* Ingestion Slide-out Drawer */}
@@ -321,6 +402,7 @@ function MainAppContent() {
             onUploadFile={handleUploadFile}
             onPasteSubmit={handlePasteSubmit}
             onLoadSample={handleLoadSample}
+            onImportRevenue={handleRevenueImport}
             alert={alert}
             onDismissAlert={() => setAlert(null)}
             loading={loading}

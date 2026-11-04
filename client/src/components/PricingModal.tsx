@@ -29,7 +29,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
               Active LLM Pricing Catalog
             </h3>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Unit prices in USD per 1,000 tokens applied during ingestion.
+              Unit prices in USD per 1,000 tokens; current rates are applied when costs are queried.
             </p>
           </div>
           <button

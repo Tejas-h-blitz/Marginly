@@ -1,6 +1,6 @@
 # Marginly — Product & Architecture Specification
 
-> **Status:** Current implementation, reviewed November 3, 2026. This document distinguishes working application behavior from static previews and future work.
+> **Status:** Current implementation, reviewed November 4, 2026. This document distinguishes working application behavior from static previews and future work.
 
 ## 1. Product summary
 
@@ -15,7 +15,7 @@ The product currently analyzes uploaded or pasted data. It does not collect usag
 The active landing page contains:
 
 - A responsive header with theme control and Clerk sign-in.
-- A hero section with a small interactive margin calculator. Its displayed rates and results are illustrative, not connected to imported account data or provider APIs.
+- A hero section with a small interactive margin calculator labeled “Illustrative example, not your data.” Its rates and results are not connected to imported account data or provider APIs.
 - A product dashboard preview with static sample figures.
 - A model-rate ticker and a footer.
 
@@ -25,19 +25,28 @@ The hero calculator and dashboard preview are marketing UI; they do not represen
 
 After sign-in, a user can:
 
-- Import a CSV or paste CSV/JSON usage rows.
+- Import a CSV or paste CSV/JSON usage rows, and import customer revenue from a CSV.
 - Load the bundled sample CSV into their own account.
-- Review cost and token summary cards, a customer spend chart, and a customer table.
+- Select a month or All time, then review cost and token summaries, a customer spend chart, and a customer table.
+- Set each customer's monthly revenue inline or provide it through a revenue CSV.
 - View the active model pricing catalog.
 - Export the customer breakdown as CSV or clear their own imported usage data.
 
-The dashboard includes:
+For a selected month, the dashboard includes:
 
-- Total priced cost, top customer, active account count, token volume, and average cost per priced request.
+- Total revenue, total priced cost, blended margin percentage, unprofitable customer count, active account count, token volume, and average cost per priced request.
+- Per-customer margin and margin percentage; negative-margin customers are highlighted. Customers without revenue are omitted from margin totals.
+- Warnings for unpriced models (which make displayed margins overstate actual margins) and records with missing or invalid timestamps.
+
+All time shows costs only. Revenue and margin comparisons require a selected month.
+
+Other dashboard features:
+
+- Cost-only totals, top customer, active account count, token volume, and average cost per priced request in All time.
 - A top-three spend concentration indicator when there are at least eight customers; it flags a concentration risk at 70% or more of priced spend.
 - An unpriced-model warning listing unrecognized model names and request counts.
 - A chart of up to eight customers.
-- A customer table with search, sorting, spend-share filters, and customer ID copying.
+- A customer table with search, sorting, spend-share filters, customer ID copying, and inline monthly revenue editing.
 
 ## 3. Authentication and data access
 
@@ -46,21 +55,23 @@ The dashboard includes:
 - If valid Clerk server keys are not configured, API access remains unavailable and returns 401. There is no demo identity or `demo-user` fallback.
 - Customer and usage records are scoped to the authenticated Clerk user in application queries and writes.
 - The sample-data endpoint is protected by the same authentication and adds sample rows to the signed-in user's account.
-- The workspace selector is a local UI preference, not team membership, authorization, or a separately enforced tenant.
+- There is no workspace or team selector; all records remain scoped to the signed-in user.
 
 The API currently exposes:
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Public health response |
-| `GET` | `/api/summary` | User-scoped dashboard totals and unpriced-model counts |
-| `GET` | `/api/customers` | User-scoped customer cost breakdown |
+| `GET` | `/api/summary?month=YYYY-MM\|all` | User-scoped monthly or all-time totals, available months, and unpriced-model counts |
+| `GET` | `/api/customers?month=YYYY-MM\|all` | User-scoped customer cost and (for a month) margin breakdown |
+| `PUT` | `/api/customers/:customerId/revenue` | Set or clear a user's monthly revenue for an owned customer |
+| `POST` | `/api/revenue/import` | Import customer monthly revenue from CSV |
 | `GET` | `/api/pricing` | Active model pricing catalog |
 | `POST` | `/api/upload` | Upload and import CSV or JSON file data |
 | `POST` | `/api/paste` | Import pasted CSV or JSON data |
 | `POST` | `/api/load-sample` | Import bundled sample data for the signed-in user |
 | `POST` | `/api/clear` | Delete the signed-in user's usage and customer rows |
-| `GET` | `/api/export` | Download the signed-in user's customer breakdown as CSV |
+| `GET` | `/api/export?month=YYYY-MM\|all` | Download the signed-in user's customer breakdown as CSV |
 
 ## 4. Import and pricing behavior
 
@@ -76,16 +87,21 @@ CSV uploads and pasted content, or JSON arrays of objects, are supported. Recogn
 - Records whose model cannot be resolved are unpriced. They do not contribute to cost totals; the dashboard lists each model and its request count. Import responses report the number of unpriced records in that import.
 - Only token counts, model names, customer IDs, and timestamps are persisted for usage records. Cost is recalculated at query time from the current pricing catalog. Adding a rate for a previously unpriced model can therefore make existing records priced in subsequent queries.
 - Historical rates are not versioned. Changing a model's current rate changes the recalculated cost for past records. Effective-date pricing is a future requirement for accurate historical billing.
+- Revenue CSVs require `customer_id,monthly_revenue_usd`; customer IDs must already belong to the authenticated user. Revenue is non-negative, accepts up to two decimal places, and is stored once per customer (not versioned by month).
+- The import drawer provides usage and revenue CSV templates and advises using anonymized customer IDs rather than emails or names.
 
 ## 5. Analytics and export details
 
 - Customer totals include all requests and tokens. Costs include only records with a recognized active price.
 - Average cost per request uses priced requests as its denominator.
 - Customer spend percentages use total priced cost.
+- Month filtering uses UTC calendar-month boundaries. Records with missing or invalid timestamps are included only in All time; their count is reported separately.
+- For a month, margin is monthly revenue minus priced cost, and margin percentage is margin divided by revenue. Customers without revenue are excluded from margin totals. Unpriced records are excluded from cost, so their presence means actual margin may be lower than shown.
+- All-time exports leave monthly margin and margin-percentage cells blank.
 - The concentration indicator considers the top three customers and appears only when there are at least eight customers; its threshold is 70%.
 - CSV export columns are:
 
-  `customer_id,total_requests,priced_requests,total_input_tokens,total_output_tokens,total_tokens,total_cost_usd,avg_cost_per_request_usd,percent_of_total_cost`
+  `customer_id,total_requests,priced_requests,total_input_tokens,total_output_tokens,total_tokens,monthly_revenue_usd,total_cost_usd,margin_usd,margin_percent,avg_cost_per_request_usd,percent_of_total_cost`
 
 ## 6. Architecture and deployment
 
@@ -98,7 +114,7 @@ CSV uploads and pasted content, or JSON arrays of objects, are supported. Recogn
 | Schema | `server/prisma/schema.prisma` |
 | Production serving | Express serves the built client from `client/dist` when present |
 
-The root `npm run build` command builds the client, generates the Prisma client, then compiles the server. `npm start` starts the server on port 3001 by default. Configure Clerk client/server keys and `DATABASE_URL` for the intended environment.
+The root `npm run build` command builds the client, generates the Prisma client, then compiles the server. `npm start` starts the server on port 3001 by default. Configure Clerk client/server keys and `DATABASE_URL`; production startup fails if `DATABASE_URL` is missing or unreachable, and embedded PGlite is development-only.
 
 When using the embedded PGlite fallback, its data directory is `dev-postgres-data`. External PostgreSQL deployments must have the current schema/migrations applied; the embedded fallback migration behavior is not a substitute for deploying migrations to a hosted database.
 
@@ -106,7 +122,7 @@ When using the embedded PGlite fallback, its data directory is `dev-postgres-dat
 
 The active Prisma schema defines:
 
-- **Customer:** user ID, customer ID, timestamps; unique per `(userId, customerId)`.
+- **Customer:** user ID, customer ID, nullable monthly revenue in USD, timestamps; unique per `(userId, customerId)`.
 - **UsageRecord:** user ID, customer ID, optional event timestamp, original model name, input tokens, output tokens.
 - **ModelPricing:** model key, display name, provider, input and output rates.
 

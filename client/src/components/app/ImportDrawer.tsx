@@ -8,6 +8,7 @@ interface ImportDrawerProps {
   onUploadFile: (file: File) => void;
   onPasteSubmit: (content: string, format: 'csv' | 'json') => void;
   onLoadSample: () => void;
+  onImportRevenue: (file: File) => void;
   alert: AlertNotification | null;
   onDismissAlert: () => void;
   loading: boolean;
@@ -19,11 +20,21 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
   onUploadFile,
   onPasteSubmit,
   onLoadSample,
+  onImportRevenue,
   alert,
   onDismissAlert,
   loading
 }) => {
   if (!isOpen) return null;
+
+  const downloadTemplate = (name: string, contents: string) => {
+    const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -51,6 +62,51 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 p-3 text-xs">
+          <div>
+            <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">First import? Start with a CSV template</h4>
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              Usage columns: <code>customer_id,timestamp,model_name,input_tokens,output_tokens</code>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => downloadTemplate('marginly-usage-template.csv', 'customer_id,timestamp,model_name,input_tokens,output_tokens\ncustomer_001,2026-11-01T10:00:00Z,gpt-4o,1000,250\n')}
+                className="rounded-md border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800"
+              >
+                Download usage template
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadTemplate('marginly-revenue-template.csv', 'customer_id,monthly_revenue_usd\ncustomer_001,499.00\n')}
+                className="rounded-md border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800"
+              >
+                Download revenue template
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            Revenue columns: <code>customer_id,monthly_revenue_usd</code>
+          </p>
+          <label className="inline-flex cursor-pointer items-center rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700">
+            Import revenue CSV
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              disabled={loading}
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) onImportRevenue(file);
+                event.currentTarget.value = '';
+              }}
+            />
+          </label>
+          <p className="text-[11px] text-amber-800 dark:text-amber-300">
+            Use anonymized customer IDs (not emails or names). You can delete all your data at any time with Clear.
+          </p>
         </div>
 
         {/* 10-Second Quick Sample Ingestion */}

@@ -3,9 +3,10 @@ import { UsageSummary } from '../../types/index.js';
 
 interface UnpricedModelsWarningProps {
   models: UsageSummary['unpricedModels'];
+  month: string;
 }
 
-export const UnpricedModelsWarning: React.FC<UnpricedModelsWarningProps> = ({ models }) => {
+export const UnpricedModelsWarning: React.FC<UnpricedModelsWarningProps> = ({ models, month }) => {
   if (models.length === 0) return null;
 
   const totalUnpriced = models.reduce((sum, model) => sum + model.requestCount, 0);
@@ -18,6 +19,11 @@ export const UnpricedModelsWarning: React.FC<UnpricedModelsWarningProps> = ({ mo
       <h2 className="text-xs font-semibold">
         {totalUnpriced} request{totalUnpriced === 1 ? '' : 's'} excluded from cost totals because the model pricing is unknown.
       </h2>
+      {month !== 'all' && (
+        <p className="mt-1 text-xs">
+          Margin is overstated for this month until pricing is added for these models.
+        </p>
+      )}
       <ul className="mt-2 space-y-1">
         {models.map(model => (
           <li key={model.modelName} className="flex justify-between gap-4 text-xs">

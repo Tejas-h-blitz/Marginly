@@ -60,18 +60,3 @@ export function normalizeModelName(rawName: string, pricingKeys: string[]): stri
 // Text rates only. Audio, image, and video rates differ and are out of scope.
 // TODO: gemini-3.8-flash and gemini-3.6-flash rates double on 2027-01-01 (input 0.0015, output 0.0075 per 1k).
 // TODO: gemini-3.1-pro-preview and gemini-2.5-pro use higher rates for prompts over 200k tokens. Ignore for now.
-export function calculateCost(
-  inputTokens: number,
-  outputTokens: number,
-  modelPricing: ModelPricingItem
-): { inputCost: number; outputCost: number; totalCost: number } {
-  const inputCost = (inputTokens / 1000) * modelPricing.costPer1kInput;
-  const outputCost = (outputTokens / 1000) * modelPricing.costPer1kOutput;
-  const totalCost = inputCost + outputCost;
-
-  return {
-    inputCost,
-    outputCost,
-    totalCost
-  };
-}

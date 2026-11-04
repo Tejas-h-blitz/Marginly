@@ -1,36 +1,39 @@
 import React from 'react';
 import { CustomerBreakdown } from '../../types/index.js';
+import { addDecimalStrings, compareMoney, formatPercent } from '../../money.js';
 
 interface ConcentrationBannerProps {
   customers: CustomerBreakdown[];
-  totalCost: number;
+  totalCost: string;
 }
 
 export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ customers, totalCost }) => {
-  if (!customers || customers.length < 8 || totalCost <= 0) {
+  if (!customers || customers.length < 8 || compareMoney(totalCost, '0') <= 0) {
     return null;
   }
 
   // Calculate top 3 concentration
   const top3 = customers.slice(0, 3);
-  const top3Cost = top3.reduce((sum, c) => sum + c.totalCost, 0);
-  const rawShare = totalCost > 0 ? (top3Cost / totalCost) * 100 : 0;
+  const rawShare = top3.reduce(
+    (sum, customer) => addDecimalStrings(sum, customer.percentOfTotal),
+    '0'
+  );
 
   // Format exact share: never rounded up to 100% unless mathematically >= 100%
-  const formattedShare = rawShare >= 100
+  const formattedShare = compareMoney(rawShare, '100') >= 0
     ? '100%'
-    : rawShare >= 99.95
+    : compareMoney(rawShare, '99.95') >= 0
     ? '99.9%'
-    : `${Number(rawShare.toFixed(1))}%`;
+    : formatPercent(rawShare);
 
-  const top1Share = top3[0] && totalCost > 0 ? (top3[0].totalCost / totalCost) * 100 : 0;
-  const formattedTop1Share = top1Share >= 100
+  const top1Share = top3[0]?.percentOfTotal ?? '0';
+  const formattedTop1Share = compareMoney(top1Share, '100') >= 0
     ? '100%'
-    : top1Share >= 99.95
+    : compareMoney(top1Share, '99.95') >= 0
     ? '99.9%'
-    : `${Number(top1Share.toFixed(1))}%`;
+    : formatPercent(top1Share);
 
-  const isHighConcentration = rawShare >= 70;
+  const isHighConcentration = compareMoney(rawShare, '70') >= 0;
 
   return (
     <div

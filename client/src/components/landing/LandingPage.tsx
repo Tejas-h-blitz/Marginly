@@ -8,27 +8,21 @@ import { Footer } from './Footer.js';
 interface LandingPageProps {
   onLaunchApp: () => void;
   onOpenAuth: () => void;
-  isAuthenticated: boolean;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onLaunchApp,
-  onOpenAuth,
-  isAuthenticated
+  onOpenAuth
 }) => {
   return (
     <div className="min-h-screen bg-[#fbfbfb] dark:bg-[#0c0d0f] text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors">
-      <LandingNavbar
-        onOpenAuth={onOpenAuth}
-        onLaunchApp={onLaunchApp}
-        isAuthenticated={isAuthenticated}
-      />
+      <LandingNavbar onLaunchApp={onLaunchApp} onOpenAuth={onOpenAuth} />
       <main className="flex-1">
         <HeroSection onLaunchApp={onLaunchApp} onOpenAuth={onOpenAuth} />
         <ProductShowcase onLaunchApp={onLaunchApp} />
         <ModelRateTicker />
       </main>
-      <Footer onLaunchApp={onLaunchApp} onOpenAuth={onOpenAuth} />
+      <Footer />
     </div>
   );
 };

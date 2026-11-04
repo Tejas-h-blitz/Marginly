@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { CustomerBreakdown } from '../types/index.js';
 import { useTheme } from '../context/ThemeContext.js';
+import { formatPercent, formatUsd } from '../money.js';
 
 interface CostChartProps {
   customers: CustomerBreakdown[];
@@ -37,13 +38,13 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
         <div className="flex justify-between gap-4 font-mono">
           <span className="text-zinc-500">Spend:</span>
           <span className="font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
-            ${data.totalCost.toFixed(4)} USD
+            ${formatUsd(data.totalCost)} USD
           </span>
         </div>
         <div className="flex justify-between gap-4 font-mono">
           <span className="text-zinc-500">Share:</span>
           <span className="text-zinc-700 dark:text-zinc-300 tabular-nums">
-            {data.percentOfTotal}% of bill
+            {formatPercent(data.percentOfTotal)} of bill
           </span>
         </div>
         <div className="flex justify-between gap-4 font-mono">
@@ -54,7 +55,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
         </div>
         <div className="flex justify-between gap-4 font-mono text-[11px] text-zinc-400 dark:text-zinc-500 pt-0.5">
           <span>Avg / Req:</span>
-          <span className="tabular-nums">${data.avgCostPerRequest.toFixed(5)}</span>
+          <span className="tabular-nums">${formatUsd(data.avgCostPerRequest, 5)}</span>
         </div>
       </div>
     );
@@ -70,7 +71,10 @@ export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
   }
 
   // Display top 8 customers for optimal scannability
-  const chartData = customers.slice(0, 8);
+  const chartData = customers.slice(0, 8).map(customer => ({
+    ...customer,
+    totalCost: Number(customer.totalCost)
+  }));
 
   const isDark = theme === 'dark';
   const axisColor = isDark ? '#71717a' : '#71717a';

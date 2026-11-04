@@ -11,6 +11,7 @@ model Customer {
   id           String        @id @default(uuid())
   userId       String        @map("user_id")
   customerId   String        @map("customer_id")
+  monthlyRevenueUsd Decimal? @map("monthly_revenue_usd") @db.Decimal(14, 2)
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   usageRecords UsageRecord[]

@@ -8,7 +8,10 @@ export function generateCustomerBreakdownCsv(customers: CustomerBreakdown[]): st
     'total_input_tokens',
     'total_output_tokens',
     'total_tokens',
+    'monthly_revenue_usd',
     'total_cost_usd',
+    'margin_usd',
+    'margin_percent',
     'avg_cost_per_request_usd',
     'percent_of_total_cost'
   ];
@@ -20,9 +23,12 @@ export function generateCustomerBreakdownCsv(customers: CustomerBreakdown[]): st
     c.totalInputTokens,
     c.totalOutputTokens,
     c.totalTokens,
-    c.totalCost.toFixed(4),
-    c.avgCostPerRequest.toFixed(5),
-    `${Number(c.percentOfTotal.toFixed(2))}%`
+    c.monthlyRevenueUsd ?? '',
+    c.totalCost,
+    c.marginUsd ?? '',
+    c.marginPercent ?? '',
+    c.avgCostPerRequest,
+    c.percentOfTotal
   ].join(','));
 
   return [headers.join(','), ...rows].join('\n');

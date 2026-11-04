@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { UserButton } from '@clerk/react';
-import { useAuth } from '../../context/AuthContext.js';
 import { useTheme } from '../../context/ThemeContext.js';
 import { isClerkConfigured } from '../../context/ClerkProviderWrapper.js';
 
 interface AppNavbarProps {
-  onOpenImport: () => void;
   onOpenPricing: () => void;
   onClearData: () => void;
   onBackToLanding: () => void;
@@ -13,35 +11,18 @@ interface AppNavbarProps {
 }
 
 export const AppNavbar: React.FC<AppNavbarProps> = ({
-  onOpenImport,
   onOpenPricing,
   onClearData,
   onBackToLanding,
   totalCustomers
 }) => {
-  const { user, workspace } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
-
-  const clerkUser = (typeof window !== 'undefined' && (window as any).Clerk?.user) || null;
-  const signedInName =
-    clerkUser?.fullName ||
-    clerkUser?.firstName ||
-    clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
-    user?.name;
-
-  const workspaceDisplayName =
-    signedInName && signedInName !== 'Acme AI / Production'
-      ? signedInName
-      : workspace?.name && workspace.name !== 'Acme AI / Production'
-      ? workspace.name
-      : 'My workspace';
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0c0d0f]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 px-4 sm:px-6 py-2.5 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
-        {/* Left Section: Logo & Workspace Selector */}
+        {/* Left Section: Logo */}
         <div className="flex items-center gap-3 sm:gap-4">
           {/* Logo */}
           <button
@@ -64,36 +45,6 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
             </div>
           </button>
 
-          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
-
-          {/* Workspace Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setWorkspaceDropdownOpen(!workspaceDropdownOpen)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/70 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="max-w-[140px] sm:max-w-none truncate text-[11px] font-mono">{workspaceDisplayName}</span>
-              <svg className="w-3 h-3 text-zinc-400 ml-0.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-
-            {workspaceDropdownOpen && (
-              <div className="absolute left-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-lg p-1.5 z-50 animate-in fade-in zoom-in-95">
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-mono">
-                  Active Workspace
-                </div>
-                <button
-                  onClick={() => setWorkspaceDropdownOpen(false)}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
-                >
-                  <span className="truncate">{workspaceDisplayName}</span>
-                  <span className="text-zinc-600 dark:text-zinc-300 text-xs">✓</span>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Right Section: Actions, Theme Toggle & User */}
@@ -110,12 +61,17 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
             <span>Model Rates</span>
           </button>
 
-          {/* Landing Page Link Button */}
+          {/* Return to home */}
           <button
             onClick={onBackToLanding}
-            className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 transition-colors"
+            aria-label="Go to home"
+            title="Go to home"
+            className="hidden lg:flex items-center justify-center p-1.5 rounded-md text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
-            <span>Landing</span>
+            <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m3 10 9-7 9 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 9v11h14V9M9 20v-6h6v6" />
+            </svg>
           </button>
 
           {/* Theme Toggle Button */}
@@ -152,17 +108,6 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
               </svg>
             </button>
           )}
-
-          {/* Import Logs Button (Primary Action) */}
-          <button
-            onClick={onOpenImport}
-            className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
-          >
-            <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Import Logs</span>
-          </button>
 
           {/* User Profile Avatar & Dropdown */}
           {isClerkConfigured() ? (

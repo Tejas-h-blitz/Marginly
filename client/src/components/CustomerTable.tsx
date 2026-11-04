@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
 import { CustomerBreakdown } from '../types/index.js';
+import { compareMoney, formatPercent, formatUsd } from '../money.js';
 
 interface CustomerTableProps {
   customers: CustomerBreakdown[];
+  month: string;
+  onSaveRevenue: (customerId: string, value: string | null) => Promise<boolean>;
   loading?: boolean;
 }
 
 type SortField = 'totalCost' | 'totalRequests' | 'totalTokens' | 'customerId';
 type SortDirection = 'asc' | 'desc';
 
-export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading = false }) => {
+export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, onSaveRevenue, loading = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('totalCost');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterTier, setFilterTier] = useState<'all' | 'high' | 'low'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [revenueDrafts, setRevenueDrafts] = useState<Record<string, string>>({});
+  const [savingRevenueId, setSavingRevenueId] = useState<string | null>(null);
+  const showMonthlyMetrics = month !== 'all';
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -37,16 +43,16 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
   );
 
   if (filterTier === 'high') {
-    filtered = filtered.filter(c => c.percentOfTotal >= 10);
+    filtered = filtered.filter(c => compareMoney(c.percentOfTotal, '10') >= 0);
   } else if (filterTier === 'low') {
-    filtered = filtered.filter(c => c.percentOfTotal < 5);
+    filtered = filtered.filter(c => compareMoney(c.percentOfTotal, '5') < 0);
   }
 
   // 2. Sort
   filtered.sort((a, b) => {
     let comparison = 0;
     if (sortField === 'totalCost') {
-      comparison = a.totalCost - b.totalCost;
+      comparison = compareMoney(a.totalCost, b.totalCost);
     } else if (sortField === 'totalRequests') {
       comparison = a.totalRequests - b.totalRequests;
     } else if (sortField === 'totalTokens') {
@@ -136,7 +142,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
 
       {/* Table Container with Sticky Header */}
       <div className="w-full overflow-x-auto max-h-[520px]">
-        <table className="w-full border-collapse text-left text-xs">
+        <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
           <thead>
             <tr className="sticky top-0 bg-zinc-50/95 dark:bg-[#15161a]/95 backdrop-blur-sm border-b border-zinc-200/90 dark:border-zinc-800/90 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400 select-none z-10">
               <th className="py-2.5 px-3.5 w-12 text-center font-mono">#</th>
@@ -183,6 +189,12 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
               </th>
               <th className="py-2.5 px-3.5 w-36">Spend Share</th>
               <th className="py-2.5 px-3.5 text-right">Avg / Priced Req</th>
+              {showMonthlyMetrics && (
+                <>
+                  <th className="py-2.5 px-3.5">Monthly Revenue</th>
+                  <th className="py-2.5 px-3.5 text-right">Margin</th>
+                </>
+              )}
               <th
                 onClick={() => handleSort('totalCost')}
                 className="py-2.5 px-3.5 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-right"
@@ -235,7 +247,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
               ))
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-zinc-500 dark:text-zinc-400">
+                <td colSpan={showMonthlyMetrics ? 11 : 9} className="text-center py-12 text-zinc-500 dark:text-zinc-400">
                   {customers.length === 0 ? (
                     <div className="max-w-xs mx-auto py-2">
                       <div className="w-9 h-9 mx-auto mb-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
@@ -258,12 +270,12 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
             ) : (
               filtered.map((c, idx) => {
                 const rank = idx + 1;
-                const isWhale = c.percentOfTotal >= 20 || rank === 1;
+                const isWhale = compareMoney(c.percentOfTotal, '20') >= 0 || rank === 1;
 
                 return (
                   <tr
                     key={c.customerId}
-                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors"
+                    className={`${c.unprofitable ? 'bg-rose-50/70 dark:bg-rose-950/20' : ''} hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors`}
                   >
                     {/* Rank */}
                     <td className="py-2.5 px-3.5 text-center font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
@@ -323,19 +335,73 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
                                 ? 'bg-amber-500'
                                 : 'bg-zinc-400 dark:bg-zinc-500'
                             }`}
-                            style={{ width: `${Math.min(100, Math.max(3, c.percentOfTotal))}%` }}
+                            style={{ width: `${Math.min(100, Math.max(3, Number(c.percentOfTotal)))}%` }}
                           />
                         </div>
                         <span className="text-[11px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400 min-w-[34px] text-right">
-                          {c.percentOfTotal}%
+                          {formatPercent(c.percentOfTotal)}
                         </span>
                       </div>
                     </td>
 
                     {/* Avg Cost / Req */}
                     <td className="py-2.5 px-3.5 text-right font-mono tabular-nums text-xs text-zinc-500 dark:text-zinc-400">
-                      ${c.avgCostPerRequest.toFixed(4)}
+                      ${formatUsd(c.avgCostPerRequest, 5)}
                     </td>
+
+                    {showMonthlyMetrics && (
+                      <>
+                        <td className="py-2 px-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-zinc-500 dark:text-zinc-400">$</span>
+                            <input
+                              aria-label={`Monthly revenue for ${c.customerId}`}
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="—"
+                              value={revenueDrafts[c.customerId] ?? c.monthlyRevenueUsd ?? ''}
+                              onChange={event => setRevenueDrafts(current => ({
+                                ...current,
+                                [c.customerId]: event.target.value
+                              }))}
+                              onKeyDown={event => {
+                                if (event.key === 'Enter') event.currentTarget.blur();
+                              }}
+                              className="w-24 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900/70 px-2 py-1 font-mono text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
+                            />
+                            <button
+                              type="button"
+                              disabled={savingRevenueId === c.customerId}
+                              onClick={async () => {
+                                setSavingRevenueId(c.customerId);
+                                const draft = revenueDrafts[c.customerId] ?? c.monthlyRevenueUsd ?? '';
+                                const success = await onSaveRevenue(c.customerId, draft.trim() ? draft.trim() : null);
+                                if (success) {
+                                  setRevenueDrafts(current => {
+                                    const next = { ...current };
+                                    delete next[c.customerId];
+                                    return next;
+                                  });
+                                }
+                                setSavingRevenueId(null);
+                              }}
+                              className="text-[10px] font-medium text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100 disabled:opacity-50"
+                            >
+                              {savingRevenueId === c.customerId ? 'Saving' : 'Save'}
+                            </button>
+                          </div>
+                        </td>
+                        <td className={`py-2.5 px-3.5 text-right font-mono tabular-nums text-xs font-semibold ${
+                          c.unprofitable
+                            ? 'text-rose-700 dark:text-rose-300'
+                            : 'text-zinc-800 dark:text-zinc-200'
+                        }`}>
+                          {c.marginUsd === null
+                            ? '-'
+                            : <><span>${formatUsd(c.marginUsd)}</span><span className="block text-[10px] font-normal opacity-70">{formatPercent(c.marginPercent)}</span></>}
+                        </td>
+                      </>
+                    )}
 
                     {/* Total Cost */}
                     <td className={`py-2.5 px-3.5 text-right font-mono tabular-nums font-semibold text-xs ${
@@ -343,7 +409,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, loading
                         ? 'text-amber-700 dark:text-amber-300'
                         : 'text-zinc-900 dark:text-zinc-100'
                     }`}>
-                      ${c.totalCost.toFixed(4)}
+                      ${formatUsd(c.totalCost)}
                     </td>
                   </tr>
                 );

@@ -1,26 +1,38 @@
 export interface CustomerBreakdown {
   customerId: string;
+  monthlyRevenueUsd: string | null;
   totalRequests: number;
   pricedRequests: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
-  totalCost: number;
-  avgCostPerRequest: number;
-  percentOfTotal: number;
+  totalCost: string;
+  avgCostPerRequest: string;
+  percentOfTotal: string;
+  marginUsd: string | null;
+  marginPercent: string | null;
+  unprofitable: boolean;
 }
 
 export interface UsageSummary {
+  month: string;
+  availableMonths: string[];
+  untimestampedRequests: number;
   totalCustomers: number;
   totalRequests: number;
   pricedRequests: number;
+  avgCostPerRequest: string;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
-  totalCost: number;
+  totalCost: string;
+  totalRevenueUsd: string | null;
+  totalMarginUsd: string | null;
+  blendedMarginPercent: string | null;
+  unprofitableCustomers: number;
   topCustomer: {
     customerId: string;
-    cost: number;
+    cost: string;
   } | null;
   unpricedModels: Array<{
     modelName: string;

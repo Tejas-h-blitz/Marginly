@@ -10,11 +10,14 @@ import {
   saveRecords,
   getCustomersBreakdown,
   getOverallSummary,
-  clearAllData
+  clearAllData,
+  importCustomerRevenue,
+  updateCustomerRevenue
 } from '../services/usageService.js';
 import { getActivePricing } from '../services/pricingService.js';
 import { generateCustomerBreakdownCsv } from '../services/exportService.js';
 import { PastePayload } from '../types/index.js';
+import { parseMonthlyRevenue, toMoneyString, validateMonth } from '../services/money.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,6 +25,10 @@ const upload = multer({
 });
 
 export const apiRouter = Router();
+
+function getRequestedMonth(req: Request): string | undefined {
+  return validateMonth(req.query.month);
+}
 
 export function getAuthenticatedUserId(req: Request): string | null {
   try {
@@ -48,9 +55,13 @@ apiRouter.use((req: Request, res: Response, next) => {
 apiRouter.get('/summary', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = res.locals.userId;
-    const summary = await getOverallSummary(userId);
+    const summary = await getOverallSummary(userId, getRequestedMonth(req));
     res.json(summary);
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Month must be')) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error('Error fetching summary:', err);
     res.status(500).json({ error: 'Failed to fetch summary metrics' });
   }
@@ -60,11 +71,84 @@ apiRouter.get('/summary', async (req: Request, res: Response): Promise<void> => 
 apiRouter.get('/customers', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = res.locals.userId;
-    const breakdown = await getCustomersBreakdown(userId);
+    const breakdown = await getCustomersBreakdown(userId, getRequestedMonth(req));
     res.json(breakdown);
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Month must be')) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error('Error fetching customers:', err);
     res.status(500).json({ error: 'Failed to fetch customer breakdown' });
+  }
+});
+
+// PUT /api/customers/:customerId/revenue
+apiRouter.put('/customers/:customerId/revenue', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawRevenue = req.body?.monthly_revenue_usd;
+    const revenue = rawRevenue === null ? null : toMoneyString(parseMonthlyRevenue(rawRevenue));
+    await updateCustomerRevenue(res.locals.userId, req.params.customerId, revenue);
+    res.json({ success: true, customerId: req.params.customerId, monthlyRevenueUsd: revenue });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update monthly revenue.';
+    const status = message.startsWith('Monthly revenue') ? 400 : message.startsWith('Customer not found') ? 404 : 500;
+    if (status === 500) console.error('Error updating customer revenue:', err);
+    res.status(status).json({ error: message });
+  }
+});
+
+// POST /api/revenue/import
+apiRouter.post('/revenue/import', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.file || !req.file.originalname.toLowerCase().endsWith('.csv')) {
+      res.status(400).json({ error: 'Upload a CSV file with customer_id and monthly_revenue_usd columns.' });
+      return;
+    }
+    let rows: Array<Record<string, unknown>>;
+    try {
+      rows = parseCsv(req.file.buffer.toString('utf-8')) as Array<Record<string, unknown>>;
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? `Invalid revenue CSV: ${err.message}` : 'Invalid revenue CSV.'
+      });
+      return;
+    }
+    if (rows.length === 0) {
+      res.status(400).json({ error: 'Revenue CSV contains no data rows.' });
+      return;
+    }
+    const headers = Object.keys(rows[0]);
+    if (!headers.includes('customer_id') || !headers.includes('monthly_revenue_usd')) {
+      res.status(400).json({ error: 'Revenue CSV must include customer_id and monthly_revenue_usd columns.' });
+      return;
+    }
+
+    const seenCustomerIds = new Set<string>();
+    const revenueRows = rows.map((row, index) => {
+      const customerId = String(row.customer_id ?? '').trim();
+      if (!customerId) throw new Error(`Row ${index + 2}: customer_id is required.`);
+      if (seenCustomerIds.has(customerId)) throw new Error(`Duplicate customer_id '${customerId}' in revenue CSV.`);
+      seenCustomerIds.add(customerId);
+      return {
+        customerId,
+        monthlyRevenueUsd: toMoneyString(parseMonthlyRevenue(row.monthly_revenue_usd))
+      };
+    });
+
+    const imported = await importCustomerRevenue(res.locals.userId, revenueRows);
+    res.json({ success: true, importedCustomers: imported, message: `Updated monthly revenue for ${imported} customers.` });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to import revenue CSV.';
+    const status = message.startsWith('Unknown customer IDs')
+      ? 404
+      : message.startsWith('Monthly revenue') ||
+        message.startsWith('Row ') ||
+        message.startsWith('Duplicate customer_id')
+        ? 400
+        : 500;
+    if (status === 500) console.error('Error importing customer revenue:', err);
+    res.status(status).json({ error: message });
   }
 });
 
@@ -236,13 +320,18 @@ apiRouter.post('/clear', async (req: Request, res: Response): Promise<void> => {
 apiRouter.get('/export', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = res.locals.userId;
-    const customers = await getCustomersBreakdown(userId);
+    const month = getRequestedMonth(req);
+    const customers = await getCustomersBreakdown(userId, month);
     const csvData = generateCustomerBreakdownCsv(customers);
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="customer_cost_breakdown.csv"');
+    res.setHeader('Content-Disposition', 'attachment; filename="customer_margin_breakdown.csv"');
     res.send(csvData);
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Month must be')) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error('Error exporting CSV:', err);
     res.status(500).json({ error: 'Failed to export CSV report' });
   }

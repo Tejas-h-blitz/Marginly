@@ -1,18 +1,17 @@
 import React from 'react';
+import { UserButton } from '@clerk/react';
+import { useAuth } from '../../context/AuthContext.js';
 import { useTheme } from '../../context/ThemeContext.js';
+import { isClerkConfigured } from '../../context/ClerkProviderWrapper.js';
 
 interface LandingNavbarProps {
-  onOpenAuth: () => void;
   onLaunchApp: () => void;
-  isAuthenticated: boolean;
+  onOpenAuth: () => void;
 }
 
-export const LandingNavbar: React.FC<LandingNavbarProps> = ({
-  onOpenAuth,
-  onLaunchApp,
-  isAuthenticated
-}) => {
+export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onLaunchApp, onOpenAuth }) => {
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated } = useAuth();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0c0d0f]/80 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 transition-colors">
@@ -50,23 +49,43 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
             )}
           </button>
 
-          {isAuthenticated ? (
-            <button
-              onClick={onLaunchApp}
-              className="bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium px-3.5 py-1.5 rounded-md text-xs shadow-sm transition-all"
-            >
-              Go to Dashboard
-            </button>
+          <button
+            type="button"
+            onClick={onLaunchApp}
+            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+          >
+            <svg className="h-3.5 w-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <path strokeLinecap="round" d="M3 9h18M9 21V9" />
+            </svg>
+            <span>Dashboard</span>
+          </button>
+
+          {isClerkConfigured() && isAuthenticated ? (
+            <div className="ml-0.5 flex items-center">
+              <UserButton
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: 'h-8 w-8 rounded-lg ring-1 ring-zinc-300 dark:ring-zinc-700'
+                  }
+                }}
+              />
+            </div>
           ) : (
-            <>
-              <button
-                onClick={onOpenAuth}
-                className="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 px-3 py-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-              >
-                Sign In
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              aria-label="Open account sign-in"
+              title="Account"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/80 bg-white text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+              <svg className="h-4 w-4 stroke-current fill-none stroke-[1.8]" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 21a7 7 0 0 1 14 0" />
+              </svg>
+            </button>
           )}
+
         </div>
       </div>
     </header>

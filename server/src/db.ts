@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 import path from 'path';
@@ -12,6 +12,14 @@ export interface IDatabase {
       update: Record<string, unknown>;
       create: { userId: string; customerId: string };
     }): Promise<unknown>;
+    findMany(args: { where: { userId: string } }): Promise<Array<{
+      customerId: string;
+      monthlyRevenueUsd: string | null;
+    }>>;
+    updateMany(args: {
+      where: { userId: string; customerId: string };
+      data: { monthlyRevenueUsd: string | null };
+    }): Promise<{ count: number }>;
     deleteMany(args?: { where?: { userId?: string } }): Promise<unknown>;
   };
   usageRecord: {
@@ -24,12 +32,16 @@ export interface IDatabase {
       outputTokens: number;
     }> }): Promise<{ count: number }>;
     findMany(args?: {
-      where?: { userId?: string };
+      where?: {
+        userId?: string;
+        timestamp?: { gte: Date; lt: Date } | null;
+      };
     }): Promise<Array<{
       customerId: string;
       modelName: string;
       inputTokens: number;
       outputTokens: number;
+      timestamp: Date | null;
     }>>;
     deleteMany(args?: { where?: { userId?: string } }): Promise<unknown>;
   };
@@ -122,17 +134,34 @@ async function getPglite(): Promise<PGlite> {
 
     const recalculationMigration = path.resolve(__dirname, '../prisma/migrations/20261103000000_recalculate_costs_from_tokens/migration.sql');
     await pgliteInstance.exec(fs.readFileSync(recalculationMigration, 'utf-8'));
+
+    const monthlyRevenueMigration = path.resolve(__dirname, '../prisma/migrations/20261104000000_monthly_revenue/migration.sql');
+    await pgliteInstance.exec(fs.readFileSync(monthlyRevenueMigration, 'utf-8'));
   }
   return pgliteInstance;
 }
 
 export async function checkConnection(): Promise<boolean> {
-  const dbUrl = process.env.DATABASE_URL || 'localhost:5432';
-  const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+  const dbUrl = process.env.DATABASE_URL;
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction && !dbUrl?.trim()) {
+    throw new Error('DATABASE_URL is required in production.');
+  }
+  const parsedUrl = dbUrl ? new URL(dbUrl) : null;
+  const host = parsedUrl?.hostname;
+  const localHost = !parsedUrl
+    ? 'localhost'
+    : host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+      ? host
+      : null;
 
-  if (isLocal) {
-    const reachable = await isHostPortReachable('127.0.0.1', 5432, 250);
+  if (localHost) {
+    const port = parsedUrl?.port ? Number(parsedUrl.port) : 5432;
+    const reachable = await isHostPortReachable(localHost, port, 250);
     if (!reachable) {
+      if (isProduction) {
+        throw new Error('PostgreSQL is unavailable; embedded PGlite is disabled in production.');
+      }
       usePrisma = false;
       console.log('[Database] Local PostgreSQL server not detected on port 5432.');
       console.log('[Database] Using embedded PostgreSQL instance with identical schema.');
@@ -150,6 +179,9 @@ export async function checkConnection(): Promise<boolean> {
     console.log('[Database] Connected to PostgreSQL via Prisma.');
     return true;
   } catch {
+    if (isProduction) {
+      throw new Error('Could not connect to DATABASE_URL; embedded PGlite is disabled in production.');
+    }
     usePrisma = false;
     console.log('[Database] Running with local embedded PostgreSQL engine (PGlite) using identical PostgreSQL schema.');
     await getPglite();
@@ -178,6 +210,50 @@ export const db: IDatabase = {
         ON CONFLICT (user_id, customer_id) DO NOTHING;
       `, [id, userId, customerId]);
       return { userId, customerId };
+    },
+
+    async findMany(args) {
+      if (usePrisma) {
+        const customers = await prisma.customer.findMany({
+          where: args.where,
+          select: { customerId: true, monthlyRevenueUsd: true }
+        });
+        return customers.map(customer => ({
+          customerId: customer.customerId,
+          monthlyRevenueUsd: customer.monthlyRevenueUsd?.toString() ?? null
+        }));
+      }
+      const pg = await getPglite();
+      const result = await pg.query<{
+        customer_id: string;
+        monthly_revenue_usd: string | null;
+      }>(
+        'SELECT customer_id, monthly_revenue_usd FROM customers WHERE user_id = $1;',
+        [args.where.userId]
+      );
+      return result.rows.map(customer => ({
+        customerId: customer.customer_id,
+        monthlyRevenueUsd: customer.monthly_revenue_usd
+      }));
+    },
+
+    async updateMany(args) {
+      if (usePrisma) {
+        return prisma.customer.updateMany({
+          where: args.where,
+          data: {
+            monthlyRevenueUsd: args.data.monthlyRevenueUsd === null
+              ? null
+              : new Prisma.Decimal(args.data.monthlyRevenueUsd)
+          }
+        });
+      }
+      const pg = await getPglite();
+      const result = await pg.query<{ customer_id: string }>(
+        'UPDATE customers SET monthly_revenue_usd = $3, updated_at = NOW() WHERE user_id = $1 AND customer_id = $2 RETURNING customer_id;',
+        [args.where.userId, args.where.customerId, args.data.monthlyRevenueUsd]
+      );
+      return { count: result.rows.length };
     },
 
     async deleteMany(args) {
@@ -225,28 +301,45 @@ export const db: IDatabase = {
       }
       const pg = await getPglite();
       const userId = args?.where?.userId;
+      const timestampRange = args?.where?.timestamp && args.where.timestamp !== null
+        ? args.where.timestamp
+        : undefined;
       let res;
-      if (userId) {
+      if (userId && timestampRange) {
         res = await pg.query<{
           customer_id: string;
           model_name: string;
           input_tokens: number;
           output_tokens: number;
-        }>('SELECT customer_id, model_name, input_tokens, output_tokens FROM usage_records WHERE user_id = $1;', [userId]);
+          timestamp: Date | null;
+        }>(
+          'SELECT customer_id, model_name, input_tokens, output_tokens, timestamp FROM usage_records WHERE user_id = $1 AND timestamp >= $2 AND timestamp < $3;',
+          [userId, timestampRange.gte.toISOString(), timestampRange.lt.toISOString()]
+        );
+      } else if (userId) {
+        res = await pg.query<{
+          customer_id: string;
+          model_name: string;
+          input_tokens: number;
+          output_tokens: number;
+          timestamp: Date | null;
+        }>('SELECT customer_id, model_name, input_tokens, output_tokens, timestamp FROM usage_records WHERE user_id = $1;', [userId]);
       } else {
         res = await pg.query<{
           customer_id: string;
           model_name: string;
           input_tokens: number;
           output_tokens: number;
-        }>('SELECT customer_id, model_name, input_tokens, output_tokens FROM usage_records;');
+          timestamp: Date | null;
+        }>('SELECT customer_id, model_name, input_tokens, output_tokens, timestamp FROM usage_records;');
       }
 
       return res.rows.map(r => ({
         customerId: r.customer_id,
         modelName: r.model_name,
         inputTokens: Number(r.input_tokens),
-        outputTokens: Number(r.output_tokens)
+        outputTokens: Number(r.output_tokens),
+        timestamp: r.timestamp ? new Date(r.timestamp) : null
       }));
     },
 

@@ -24,7 +24,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp, onOpenAut
   const isNegative = marginPercent < 0;
 
   return (
-    <section className="min-h-[calc(100svh-3.5rem)] flex items-center pt-14 pb-8">
+    <section id="top" className="min-h-[calc(100svh-3.5rem)] flex items-center pt-14 pb-8">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
           
@@ -73,12 +73,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp, onOpenAut
           <div className="lg:col-span-5">
             <div className="rounded-xl bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 shadow-sm p-5 space-y-4 transition-colors">
               <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                  Interactive Margin Simulator
-                </span>
-                <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
-                  Live Preview
-                </span>
+                <div>
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    Interactive Margin Simulator
+                  </span>
+                  <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                    Illustrative example, not your data
+                  </p>
+                </div>
               </div>
 
               {/* Controls */}
