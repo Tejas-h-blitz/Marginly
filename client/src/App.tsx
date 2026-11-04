@@ -12,6 +12,7 @@ import { KpiGrid } from './components/KpiGrid.js';
 import { CostChart } from './components/CostChart.js';
 import { CustomerTable } from './components/CustomerTable.js';
 import { PricingModal } from './components/PricingModal.js';
+import { InlineSpinner } from './components/InlineSpinner.js';
 import {
   CustomerBreakdown,
   UsageSummary,
@@ -44,6 +45,7 @@ function MainAppContent() {
   const { isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState<'landing' | 'app'>('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>('signin');
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
 
@@ -52,11 +54,19 @@ function MainAppContent() {
   const [customers, setCustomers] = useState<CustomerBreakdown[]>([]);
   const [pricing, setPricing] = useState<Record<string, ModelPricingItem> | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [exporting, setExporting] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [alert, setAlert] = useState<AlertNotification | null>(null);
 
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setAlert({ message, type });
   };
+
+  useEffect(() => {
+    if (!alert) return;
+    const timeout = window.setTimeout(() => setAlert(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [alert]);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const headers: Record<string, string> = {};
@@ -122,8 +132,14 @@ function MainAppContent() {
     if (isAuthenticated) {
       setCurrentView('app');
     } else {
+      setAuthInitialMode('signup');
       setIsAuthModalOpen(true);
     }
+  };
+
+  const handleOpenSignIn = () => {
+    setAuthInitialMode('signin');
+    setIsAuthModalOpen(true);
   };
 
   const handleLoadSample = async () => {
@@ -148,6 +164,7 @@ function MainAppContent() {
   };
 
   const handleExportCsv = async () => {
+    setExporting(true);
     try {
       const authHeaders = await getAuthHeaders();
       const monthQuery = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : '';
@@ -162,8 +179,11 @@ function MainAppContent() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      showAlert('Customer margin CSV exported successfully.', 'success');
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Error exporting CSV', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -210,6 +230,7 @@ function MainAppContent() {
 
   const handleClearData = async () => {
     if (!window.confirm('Are you sure you want to clear all usage data?')) return;
+    setClearing(true);
     setLoading(true);
     try {
       const authHeaders = await getAuthHeaders();
@@ -218,11 +239,13 @@ function MainAppContent() {
         headers: authHeaders
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to clear usage data.');
       showAlert(data.message, 'success');
       await loadData();
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Error clearing data', 'error');
     } finally {
+      setClearing(false);
       setLoading(false);
     }
   };
@@ -243,7 +266,12 @@ function MainAppContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
 
-      showAlert(data.message, 'success');
+      const unknownModels = (data.summary?.unpricedModels ?? [])
+        .map((model: { modelName: string }) => model.modelName);
+      const pricingWarning = unknownModels.length
+        ? ` Unpriced models still affecting this account: ${unknownModels.join(', ')}.`
+        : '';
+      showAlert(`${data.message}${pricingWarning}`, 'success');
       await loadData();
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to upload file', 'error');
@@ -269,7 +297,12 @@ function MainAppContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Processing failed');
 
-      showAlert(data.message, 'success');
+      const unknownModels = (data.summary?.unpricedModels ?? [])
+        .map((model: { modelName: string }) => model.modelName);
+      const pricingWarning = unknownModels.length
+        ? ` Unpriced models still affecting this account: ${unknownModels.join(', ')}.`
+        : '';
+      showAlert(`${data.message}${pricingWarning}`, 'success');
       await loadData();
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to process pasted data', 'error');
@@ -283,23 +316,24 @@ function MainAppContent() {
       {currentView === 'landing' ? (
         <LandingPage
           onLaunchApp={handleLaunchApp}
-          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onOpenAuth={handleOpenSignIn}
         />
       ) : (
-        <div className="min-h-screen bg-[#fbfbfb] dark:bg-[#0c0d0f] text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors">
+        <div className="app-canvas min-h-screen text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors">
           {/* Top Application Navbar */}
           <AppNavbar
             onOpenPricing={() => setIsPricingOpen(true)}
             onClearData={handleClearData}
             onBackToLanding={() => setCurrentView('landing')}
             totalCustomers={summary.totalCustomers}
+            clearing={clearing}
           />
 
           {/* Main Dashboard Content */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 pb-20 space-y-4">
             
             {/* Action Bar */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 p-4 rounded-xl shadow-xs transition-colors">
+            <div className="dashboard-enter surface-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 p-4 rounded-xl" style={{ animationDelay: '0ms' }}>
               <div>
                 <h1 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                   <span>Customer Cost &amp; Unit Economics</span>
@@ -330,32 +364,34 @@ function MainAppContent() {
                   <button
                     onClick={handleLoadSample}
                     disabled={loading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-800 dark:text-zinc-200 transition-colors"
+                    className="interaction-button flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-800 dark:text-zinc-200"
                   >
-                    <span>Load Sample Data</span>
+                    {loading ? <><InlineSpinner /> Loading...</> : <span>Load Sample Data</span>}
                   </button>
                 )}
 
                 {summary.totalCustomers > 0 && (
                   <button
                     onClick={handleExportCsv}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-800 dark:text-zinc-200 transition-colors shadow-xs"
+                    disabled={exporting}
+                    className="interaction-button flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-800 dark:text-zinc-200 shadow-xs disabled:opacity-60"
                   >
-                    <svg className="w-3.5 h-3.5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    {exporting ? <InlineSpinner /> : <svg className="w-3.5 h-3.5 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    <span>Export CSV</span>
+                    </svg>}
+                    <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
                   </button>
                 )}
 
                 <button
                   onClick={() => setIsImportOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs shadow-xs transition-colors"
+                  disabled={loading}
+                  className="interaction-button flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs shadow-xs disabled:opacity-60"
                 >
-                  <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
+                  {loading ? <InlineSpinner /> : <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>Import Logs</span>
+                  </svg>}
+                  <span>{loading ? 'Working...' : 'Import Logs'}</span>
                 </button>
               </div>
             </div>
@@ -367,7 +403,7 @@ function MainAppContent() {
             )}
 
             {summary.untimestampedRequests > 0 && (
-              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="dashboard-enter rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300" style={{ animationDelay: '45ms' }}>
                 {summary.untimestampedRequests.toLocaleString()} records have missing or invalid timestamps and are included only in All time.
               </div>
             )}
@@ -391,6 +427,8 @@ function MainAppContent() {
               customers={customers}
               month={summary.month}
               onSaveRevenue={handleSaveRevenue}
+              onImport={() => setIsImportOpen(true)}
+              onCopyError={message => showAlert(message, 'error')}
               loading={loading}
             />
           </main>
@@ -403,8 +441,6 @@ function MainAppContent() {
             onPasteSubmit={handlePasteSubmit}
             onLoadSample={handleLoadSample}
             onImportRevenue={handleRevenueImport}
-            alert={alert}
-            onDismissAlert={() => setAlert(null)}
             loading={loading}
           />
 
@@ -422,11 +458,12 @@ function MainAppContent() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={() => setCurrentView('app')}
+        initialMode={authInitialMode}
       />
 
       {/* Floating Notification Toast */}
       {alert && (
-        <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-2">
+        <div className="toast-enter fixed bottom-4 right-4 z-50" role={alert.type === 'error' ? 'alert' : 'status'} aria-live={alert.type === 'error' ? 'assertive' : 'polite'}>
           <div
             className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg shadow-lg border text-xs font-medium ${
               alert.type === 'success'
@@ -438,6 +475,8 @@ function MainAppContent() {
           >
             <span>{alert.message}</span>
             <button
+              type="button"
+              aria-label="Dismiss notification"
               onClick={() => setAlert(null)}
               className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1 text-sm leading-none"
             >

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ImportSection } from '../ImportSection.js';
-import { AlertNotification } from '../../types/index.js';
+import { InlineSpinner } from '../InlineSpinner.js';
 
 interface ImportDrawerProps {
   isOpen: boolean;
@@ -9,8 +9,6 @@ interface ImportDrawerProps {
   onPasteSubmit: (content: string, format: 'csv' | 'json') => void;
   onLoadSample: () => void;
   onImportRevenue: (file: File) => void;
-  alert: AlertNotification | null;
-  onDismissAlert: () => void;
   loading: boolean;
 }
 
@@ -21,10 +19,52 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
   onPasteSubmit,
   onLoadSample,
   onImportRevenue,
-  alert,
-  onDismissAlert,
   loading
 }) => {
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    previousFocus.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    document.body.style.overflow = 'hidden';
+    closeButton.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCloseRef.current();
+      if (event.key === 'Tab') {
+        const dialog = closeButton.current?.closest('[role="dialog"]');
+        const focusable = dialog?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocus.current?.focus();
+      previousFocus.current = null;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const downloadTemplate = (name: string, contents: string) => {
@@ -33,19 +73,23 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
     link.href = url;
     link.download = name;
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-      {/* Backdrop */}
-      <div className="absolute inset-0" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        type="button"
+        aria-label="Close import drawer"
+        onClick={onClose}
+        className="drawer-backdrop drawer-backdrop-button absolute inset-0 h-full w-full bg-black/55 backdrop-blur-sm"
+      />
 
-      <div className="relative w-full max-w-xl rounded-2xl bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-5 sm:p-6 z-10 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div role="dialog" aria-modal="true" aria-labelledby="import-drawer-title" className="drawer-panel relative z-10 flex h-full w-full max-w-xl flex-col gap-4 overflow-y-auto border-l border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-[#141518] sm:p-6">
         {/* Header */}
-        <div className="flex items-start justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
+        <div className="drawer-reveal flex items-start justify-between border-b border-zinc-100 pb-3 dark:border-zinc-800/80">
           <div>
-            <h3 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            <h3 id="import-drawer-title" className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               Upload Usage Logs
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
@@ -54,6 +98,7 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
           </div>
 
           <button
+            ref={closeButton}
             onClick={onClose}
             aria-label="Close modal"
             className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
@@ -64,7 +109,7 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
           </button>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 p-3 text-xs">
+        <div className="drawer-reveal space-y-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 p-3 text-xs">
           <div>
             <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">First import? Start with a CSV template</h4>
             <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -90,8 +135,14 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
             Revenue columns: <code>customer_id,monthly_revenue_usd</code>
           </p>
-          <label className="inline-flex cursor-pointer items-center rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700">
-            Import revenue CSV
+          <label
+            aria-disabled={loading}
+            className={`inline-flex cursor-pointer items-center rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 ${loading ? 'pointer-events-none opacity-60' : ''}`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              {loading && <InlineSpinner />}
+              {loading ? 'Importing revenue...' : 'Import revenue CSV'}
+            </span>
             <input
               type="file"
               accept=".csv,text/csv"
@@ -110,7 +161,7 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
         </div>
 
         {/* 10-Second Quick Sample Ingestion */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 text-xs">
+        <div className="drawer-reveal flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 text-xs">
           <div>
             <div className="font-medium text-zinc-900 dark:text-zinc-100">
               Want to see it in action instantly?
@@ -127,24 +178,24 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
             disabled={loading}
             className="px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs transition-all shrink-0 ml-3 disabled:opacity-50"
           >
-            {loading ? 'Loading...' : 'Load Sample CSV'}
+            {loading ? <><InlineSpinner /> Loading...</> : 'Load Sample CSV'}
           </button>
         </div>
 
         {/* Ingestion Dropzone & Paste Component */}
-        <ImportSection
-          onUploadFile={(file) => {
-            onUploadFile(file);
-            onClose();
-          }}
-          onPasteSubmit={(content, format) => {
-            onPasteSubmit(content, format);
-            onClose();
-          }}
-          alert={alert}
-          onDismissAlert={onDismissAlert}
-          loading={loading}
-        />
+        <div className="drawer-reveal">
+          <ImportSection
+            onUploadFile={(file) => {
+              onUploadFile(file);
+              onClose();
+            }}
+            onPasteSubmit={(content, format) => {
+              onPasteSubmit(content, format);
+              onClose();
+            }}
+            loading={loading}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,19 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { AlertNotification } from '../types/index.js';
+import { InlineSpinner } from './InlineSpinner.js';
 
 interface ImportSectionProps {
   onUploadFile: (file: File) => void;
   onPasteSubmit: (content: string, format: 'csv' | 'json') => void;
-  alert: AlertNotification | null;
-  onDismissAlert: () => void;
   loading: boolean;
 }
 
 export const ImportSection: React.FC<ImportSectionProps> = ({
   onUploadFile,
   onPasteSubmit,
-  alert,
-  onDismissAlert,
   loading
 }) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
@@ -25,7 +21,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (!loading && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onUploadFile(e.dataTransfer.files[0]);
     }
   };
@@ -33,6 +29,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onUploadFile(e.target.files[0]);
+      e.target.value = '';
     }
   };
 
@@ -104,14 +101,31 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
 
       {activeTab === 'upload' ? (
         <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!loading) setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+          }}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+          onClick={e => {
+            if (!loading && e.target !== fileInputRef.current) fileInputRef.current?.click();
+          }}
+          onKeyDown={e => {
+            if (!loading && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          role="button"
+          tabIndex={loading ? -1 : 0}
+          aria-disabled={loading}
+          aria-label="Choose a usage CSV or JSON file, or drop it here"
+          className={`dropzone border-2 border-dashed rounded-xl p-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 ${
             dragOver
-              ? 'border-zinc-500 bg-zinc-100 dark:bg-zinc-800/40'
-              : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 hover:border-zinc-300 dark:hover:border-zinc-700'
+              ? 'border-zinc-500 bg-zinc-100 dark:border-zinc-500 dark:bg-zinc-800/70'
+              : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30'
           }`}
         >
           <input
@@ -119,15 +133,16 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
             type="file"
             accept=".csv, .json, text/csv, application/json"
             className="hidden"
+            disabled={loading}
             onChange={handleFileChange}
           />
-          <div className="w-9 h-9 mx-auto mb-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
+          <div className={`dropzone-icon w-9 h-9 mx-auto mb-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400 ${dragOver ? '-translate-y-0.5' : ''}`}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
           <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 mb-0.5">
-            Click to upload or drag & drop CSV file
+            {loading ? <span className="inline-flex items-center gap-2"><InlineSpinner /> Importing file...</span> : 'Click to upload or drag & drop CSV / JSON'}
           </div>
           <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3">
             OpenAI & Anthropic API export format
@@ -193,32 +208,12 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
               onClick={handlePasteProcess}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs transition-all disabled:opacity-50"
             >
-              {loading ? 'Processing...' : 'Process & Calculate Costs'}
+              {loading ? <><InlineSpinner /> Processing...</> : 'Process & Calculate Costs'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Feedback Banner */}
-      {alert && (
-        <div
-          className={`p-3 rounded-lg text-xs flex items-center justify-between transition-colors ${
-            alert.type === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200'
-              : alert.type === 'error'
-              ? 'bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-200'
-              : 'bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200'
-          }`}
-        >
-          <span>{alert.message}</span>
-          <button
-            onClick={onDismissAlert}
-            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-2"
-          >
-            ×
-          </button>
-        </div>
-      )}
     </div>
   );
 };

@@ -37,11 +37,12 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
 
   return (
     <div
-      className={`rounded-xl px-4 py-3 mb-6 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors ${
+      className={`dashboard-enter rounded-xl px-4 py-3 mb-6 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
         isHighConcentration
           ? 'bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200'
           : 'bg-zinc-100/80 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
       }`}
+      style={{ animationDelay: '55ms' }}
     >
       <div className="flex items-center gap-3">
         <div

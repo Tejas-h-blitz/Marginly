@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,6 +12,7 @@ import {
 import { CustomerBreakdown } from '../types/index.js';
 import { useTheme } from '../context/ThemeContext.js';
 import { formatPercent, formatUsd } from '../money.js';
+import { useCardSpotlight } from '../hooks/useUiEffects.js';
 
 interface CostChartProps {
   customers: CustomerBreakdown[];
@@ -31,7 +32,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
   if (active && payload && payload.length > 0) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg text-xs space-y-1">
+      <div className="chart-tooltip-enter bg-white dark:bg-[#141518] border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg text-xs space-y-1">
         <div className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-1 mb-1">
           {data.customerId}
         </div>
@@ -65,6 +66,8 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
 
 export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
   const { theme } = useTheme();
+  const [activeBar, setActiveBar] = useState<number | null>(null);
+  const { onMouseMove } = useCardSpotlight();
 
   if (!customers || customers.length === 0) {
     return null;
@@ -83,7 +86,11 @@ export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
   const barWhale = '#f59e0b'; // Amber accent for top whale account
 
   return (
-    <section className="bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-5 mb-6 transition-colors">
+    <section
+      onMouseMove={onMouseMove}
+      className="dashboard-enter surface-card bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 rounded-xl p-5 mb-6"
+      style={{ animationDelay: '130ms' }}
+    >
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
         <div>
           <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
@@ -123,12 +130,17 @@ export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
               axisLine={{ stroke: gridColor }}
               tickLine={{ stroke: gridColor }}
             />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="totalCost" radius={[0, 4, 4, 0]} barSize={16}>
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? '#27272a' : '#f4f4f5', opacity: 0.45 }} />
+            <Bar dataKey="totalCost" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>
               {chartData.map((_, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={index === 0 ? barWhale : barNeutral}
+                  fillOpacity={activeBar === null || activeBar === index ? 1 : 0.35}
+                  className="chart-bar-enter"
+                  style={{ animationDelay: `${index * 55}ms` }}
+                  onMouseEnter={() => setActiveBar(index)}
+                  onMouseLeave={() => setActiveBar(null)}
                 />
               ))}
             </Bar>

@@ -9,13 +9,18 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialMode?: 'signin' | 'signup';
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initialMode = 'signin' }) => {
   const { isAuthenticated } = useAuth();
   const { theme } = useTheme();
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
   const clerkEnabled = isClerkConfigured();
+
+  useEffect(() => {
+    if (isOpen) setAuthMode(initialMode);
+  }, [initialMode, isOpen]);
 
   useEffect(() => {
     if (isOpen && isAuthenticated) {

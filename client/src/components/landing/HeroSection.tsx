@@ -1,213 +1,164 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { rangeProgressStyle } from '../../hooks/useUiEffects.js';
+import { LANDING_MODEL_CATALOG, LANDING_MODEL_GROUPS } from './modelCatalog.js';
 
 interface HeroSectionProps {
   onLaunchApp: () => void;
-  onOpenAuth: () => void;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp, onOpenAuth }) => {
-  // Interactive mini calculator states
-  const [subPrice, setSubPrice] = useState(49);
-  const [tokenUsageK, setTokenUsageK] = useState(2500); // 2.5M tokens
-  const [modelType, setModelType] = useState<'gpt4o' | 'claude_sonnet' | 'gpt4o_mini'>('gpt4o');
+export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp }) => {
+  const [monthlyRevenue, setMonthlyRevenue] = useState(49);
+  const [tokenUsageK, setTokenUsageK] = useState(2500);
+  const [selectedModelName, setSelectedModelName] = useState(LANDING_MODEL_CATALOG[0].modelName);
+  const selectedModel = useMemo(
+    () => LANDING_MODEL_CATALOG.find(model => model.modelName === selectedModelName) ?? LANDING_MODEL_CATALOG[0],
+    [selectedModelName]
+  );
+  const estimatedCost = tokenUsageK * (
+    selectedModel.costPer1kInput + selectedModel.costPer1kOutput
+  ) / 2;
+  const estimatedMargin = monthlyRevenue - estimatedCost;
+  const marginPercent = monthlyRevenue > 0 ? Math.round((estimatedMargin / monthlyRevenue) * 100) : 0;
+  const unprofitable = estimatedMargin < 0;
 
-  // Pricing per 1k tokens (blend)
-  const rates: Record<string, number> = {
-    gpt4o: 0.00625, // $2.50 input / $10.00 output blend per 1k
-    claude_sonnet: 0.009, // $3.00 input / $15.00 output blend per 1k
-    gpt4o_mini: 0.000375 // $0.15 input / $0.60 output blend per 1k
+  const scrollToHowItWorks = () => {
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
+    document.getElementById('how-it-works')?.scrollIntoView({ behavior, block: 'start' });
   };
 
-  const calculatedCost = Number((tokenUsageK * rates[modelType]).toFixed(2));
-  const profit = Number((subPrice - calculatedCost).toFixed(2));
-  const marginPercent = subPrice > 0 ? Math.round((profit / subPrice) * 100) : 0;
-  const isNegative = marginPercent < 0;
-
   return (
-    <section id="top" className="min-h-[calc(100svh-3.5rem)] flex items-center pt-14 pb-8">
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-          
-          {/* Left Column: Clear Value Proposition */}
-          <div className="lg:col-span-7 space-y-5 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/60 text-xs font-mono text-zinc-700 dark:text-zinc-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>LLM Unit Economics For SaaS Founders</span>
-            </div>
-
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 leading-[1.15]">
-              See which customers cost you the most in LLM tokens.
-            </h1>
-
-            <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto lg:mx-0 font-normal leading-relaxed">
-              Marginly maps raw OpenAI, Anthropic, and Google Gemini API logs to customer accounts, calculating per-customer unit economics and margin risk in seconds.
-            </p>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 pt-2">
-              <button
-                onClick={onLaunchApp}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium px-5 py-2.5 rounded-lg text-xs shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
-              >
-                <span>Launch Live Demo</span>
-                <span className="font-mono text-[10px]">→</span>
-              </button>
-
-              <button
-                onClick={onOpenAuth}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 font-medium px-4 py-2.5 rounded-lg text-xs transition-colors"
-              >
-                <span>Create Free Account</span>
-              </button>
-            </div>
-
-            {/* Direct Feature List */}
-            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 text-xs font-mono text-zinc-500 dark:text-zinc-400">
-              <span>• OpenAI, Anthropic & Google</span>
-              <span>• CSV Ingestion</span>
-              <span>• Export Reports</span>
-            </div>
+    <section id="top" className="landing-hero relative isolate overflow-hidden border-b border-zinc-200/80 dark:border-zinc-800/80">
+      <div className="landing-hero-grid pointer-events-none absolute inset-0 -z-10" aria-hidden="true" />
+      <div className="mx-auto grid min-h-[min(900px,calc(100svh-4rem))] max-w-6xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:py-20">
+        <div className="hero-enter max-w-2xl">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/80 px-3 py-1 text-[10px] font-medium text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+            Customer-level LLM cost visibility
           </div>
+          <h1 className="text-3xl font-semibold leading-[1.12] tracking-[-0.04em] text-zinc-950 dark:text-zinc-50 sm:text-4xl lg:text-5xl">
+            See which customers cost you the most in LLM tokens.
+          </h1>
+          <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400 sm:text-base sm:leading-7">
+            Upload your usage logs, add what each customer pays, and see who&apos;s costing you money. No SDK, no API keys.
+          </p>
+          <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={onLaunchApp}
+              className="interaction-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-[13px] font-medium text-white shadow-sm hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:w-auto"
+            >
+              Upload your usage CSV
+              <span aria-hidden="true">→</span>
+            </button>
+            <button
+              type="button"
+              onClick={scrollToHowItWorks}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-zinc-200 bg-white/70 px-4 py-2.5 text-[13px] font-medium text-zinc-700 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300 dark:hover:bg-zinc-900 sm:w-auto"
+            >
+              See how it works
+            </button>
+          </div>
+          <div className="mt-3">
+            <span className="inline-flex rounded-full border border-zinc-200 bg-white/70 px-2.5 py-1 text-[10px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400">
+              Free during early access
+            </span>
+          </div>
+          <ul className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <li>CSV upload or paste</li>
+            <li>Monthly margin view</li>
+            <li>Exportable reports</li>
+          </ul>
+        </div>
 
-          {/* Right Column: Interactive Margin Simulator Widget */}
-          <div className="lg:col-span-5">
-            <div className="rounded-xl bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 shadow-sm p-5 space-y-4 transition-colors">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                <div>
-                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                    Interactive Margin Simulator
-                  </span>
-                  <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                    Illustrative example, not your data
-                  </p>
-                </div>
+        <div className="hero-enter w-full" style={{ animationDelay: '90ms' }}>
+          <div className="surface-card rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800/80 dark:bg-[#121316] sm:p-6">
+            <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-4 dark:border-zinc-800">
+              <div>
+                <h2 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">Margin simulator</h2>
+                <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">Illustrative example, not your data</p>
               </div>
+              <span className="rounded-md border border-zinc-200 px-2 py-1 font-mono text-[9px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                USD / month
+              </span>
+            </div>
 
-              {/* Controls */}
-              <div className="space-y-3.5 text-xs">
-                {/* Subscription Fee */}
-                <div>
-                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400 mb-1">
-                    <span>Customer Plan Price</span>
-                    <span className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
-                      ${subPrice} / mo
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="15"
-                    max="199"
-                    step="5"
-                    value={subPrice}
-                    aria-label="Customer Plan Price Slider"
-                    onChange={(e) => setSubPrice(Number(e.target.value))}
-                    className="w-full accent-zinc-900 dark:accent-zinc-100 cursor-pointer h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg"
-                  />
-                </div>
+            <div className="mt-5 space-y-5">
+              <label className="block">
+                <span className="mb-2 flex items-center justify-between gap-4 text-[11px] text-zinc-600 dark:text-zinc-400">
+                  <span>Customer monthly revenue</span>
+                  <span className="font-mono font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${monthlyRevenue}</span>
+                </span>
+                <input
+                  type="range"
+                  min="15"
+                  max="199"
+                  step="1"
+                  value={monthlyRevenue}
+                  aria-label="Customer monthly revenue"
+                  onChange={event => setMonthlyRevenue(Number(event.target.value))}
+                  style={rangeProgressStyle(monthlyRevenue, 15, 199)}
+                  className="w-full cursor-pointer rounded-lg"
+                />
+              </label>
 
-                {/* Monthly Tokens */}
-                <div>
-                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400 mb-1">
-                    <span>Account Usage Volume</span>
-                    <span className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
-                      {(tokenUsageK / 1000).toFixed(1)}M tokens / mo
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="500"
-                    max="10000"
-                    step="250"
-                    value={tokenUsageK}
-                    aria-label="Account Usage Volume Slider"
-                    onChange={(e) => setTokenUsageK(Number(e.target.value))}
-                    className="w-full accent-zinc-900 dark:accent-zinc-100 cursor-pointer h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg"
-                  />
-                </div>
+              <label className="block">
+                <span className="mb-2 flex items-center justify-between gap-4 text-[11px] text-zinc-600 dark:text-zinc-400">
+                  <span>Monthly text token volume</span>
+                  <span className="font-mono font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{(tokenUsageK / 1000).toFixed(1)}M</span>
+                </span>
+                <input
+                  type="range"
+                  min="100"
+                  max="10000"
+                  step="100"
+                  value={tokenUsageK}
+                  aria-label="Monthly text token volume"
+                  onChange={event => setTokenUsageK(Number(event.target.value))}
+                  style={rangeProgressStyle(tokenUsageK, 100, 10000)}
+                  className="w-full cursor-pointer rounded-lg"
+                />
+              </label>
 
-                {/* Model Selector */}
-                <div>
-                  <div className="text-zinc-600 dark:text-zinc-400 mb-1.5">Model Used</div>
-                  <div className="grid grid-cols-3 gap-1.5 font-mono text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => setModelType('gpt4o')}
-                      className={`py-1 px-1.5 rounded-md border text-center transition-colors ${
-                        modelType === 'gpt4o'
-                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 font-medium'
-                          : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
-                      }`}
-                    >
-                      GPT-4o
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModelType('claude_sonnet')}
-                      className={`py-1 px-1.5 rounded-md border text-center transition-colors ${
-                        modelType === 'claude_sonnet'
-                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 font-medium'
-                          : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
-                      }`}
-                    >
-                      Claude 3.5
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModelType('gpt4o_mini')}
-                      className={`py-1 px-1.5 rounded-md border text-center transition-colors ${
-                        modelType === 'gpt4o_mini'
-                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 font-medium'
-                          : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
-                      }`}
-                    >
-                      4o-mini
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <label className="block text-[11px] text-zinc-600 dark:text-zinc-400">
+                Model
+                <select
+                  value={selectedModelName}
+                  onChange={event => setSelectedModelName(event.target.value)}
+                  className="mt-1.5 block min-h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                >
+                  {LANDING_MODEL_GROUPS.map(group => (
+                    <optgroup key={group.provider} label={group.provider}>
+                      {group.models.map(model => (
+                        <option key={model.modelName} value={model.modelName}>{model.displayName}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
 
-              {/* Result Summary Box */}
-              <div className={`p-3.5 rounded-lg border transition-colors ${
-                isNegative
-                  ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700/50'
-                  : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200/80 dark:border-zinc-800'
-              }`}>
-                <div className="grid grid-cols-3 gap-2 text-center font-mono">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+                <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Revenue</div>
-                    <div className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100 mt-0.5">
-                      ${subPrice}
-                    </div>
+                    <div className="text-[10px] text-zinc-500">Revenue</div>
+                    <div className="mt-1 font-mono text-[13px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${monthlyRevenue}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider">LLM Cost</div>
-                    <div className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100 mt-0.5">
-                      ${calculatedCost}
-                    </div>
+                    <div className="text-[10px] text-zinc-500">Est. model cost</div>
+                    <div className="mt-1 font-mono text-[13px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${estimatedCost.toFixed(2)}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Gross Margin</div>
-                    <div className={`text-sm font-bold tabular-nums mt-0.5 ${
-                      isNegative ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'
-                    }`}>
+                    <div className="text-[10px] text-zinc-500">Est. margin</div>
+                    <div className={`mt-1 font-mono text-[13px] font-semibold tabular-nums ${unprofitable ? 'text-amber-800 dark:text-amber-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
                       {marginPercent}%
                     </div>
                   </div>
                 </div>
-
-                {isNegative ? (
-                  <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-2.5 pt-2 border-t border-amber-200 dark:border-amber-800/40 text-center font-medium">
-                    ⚠️ Negative Margin: You lose ${Math.abs(profit).toFixed(2)}/mo on this account.
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2.5 pt-2 border-t border-zinc-200/60 dark:border-zinc-800 text-center">
-                    Healthy Unit Economics: Net gross profit of ${profit.toFixed(2)}/mo.
-                  </p>
-                )}
+                <p className="mt-3 border-t border-zinc-200 pt-2 text-center text-[10px] leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                  Estimate assumes an even split of input and output tokens. Rates are for text tokens only.
+                </p>
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </section>

@@ -1,25 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserButton } from '@clerk/react';
 import { useTheme } from '../../context/ThemeContext.js';
 import { isClerkConfigured } from '../../context/ClerkProviderWrapper.js';
+import { InlineSpinner } from '../InlineSpinner.js';
 
 interface AppNavbarProps {
   onOpenPricing: () => void;
   onClearData: () => void;
   onBackToLanding: () => void;
   totalCustomers: number;
+  clearing?: boolean;
 }
 
 export const AppNavbar: React.FC<AppNavbarProps> = ({
   onOpenPricing,
   onClearData,
   onBackToLanding,
-  totalCustomers
+  totalCustomers,
+  clearing = false
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const updateScrollState = () => setScrolled(window.scrollY > 4);
+    updateScrollState();
+    window.addEventListener('scroll', updateScrollState, { passive: true });
+    return () => window.removeEventListener('scroll', updateScrollState);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0c0d0f]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 px-4 sm:px-6 py-2.5 transition-colors">
+    <header className={`sticky top-0 z-40 px-4 sm:px-6 py-2.5 transition-[background-color,border-color] duration-200 ${
+      scrolled
+        ? 'bg-white/90 dark:bg-[#0c0d0f]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80'
+        : 'bg-white dark:bg-[#0c0d0f] border-b border-transparent'
+    }`}>
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
         {/* Left Section: Logo */}
@@ -99,13 +114,15 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
           {totalCustomers > 0 && (
             <button
               onClick={onClearData}
-              className="p-1.5 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-zinc-200/80 dark:border-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+              disabled={clearing}
+              aria-busy={clearing}
+              className="p-1.5 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-zinc-200/80 dark:border-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:opacity-60"
               title="Clear all stored logs"
               aria-label="Clear all stored logs"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {clearing ? <InlineSpinner label="Clearing data" /> : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              </svg>}
             </button>
           )}
 

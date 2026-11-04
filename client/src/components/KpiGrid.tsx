@@ -1,6 +1,7 @@
 import React from 'react';
 import { UsageSummary } from '../types/index.js';
 import { formatPercent, formatUsd } from '../money.js';
+import { useCardSpotlight, useCountUp } from '../hooks/useUiEffects.js';
 
 interface KpiGridProps {
   summary: UsageSummary;
@@ -13,21 +14,28 @@ interface MetricCardProps {
   tone?: 'default' | 'negative';
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({ label, value, detail, tone = 'default' }) => (
-  <div className={`bg-white dark:bg-[#121316] border rounded-xl p-4 flex flex-col justify-between transition-colors ${
-    tone === 'negative'
-      ? 'border-rose-300 dark:border-rose-700/60'
-      : 'border-zinc-200/90 dark:border-zinc-800/80'
-  }`}>
-    <div>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">{label}</div>
-      <div className={`text-2xl font-semibold font-mono tabular-nums tracking-tight ${
-        tone === 'negative' ? 'text-rose-700 dark:text-rose-300' : 'text-zinc-950 dark:text-zinc-50'
-      }`}>{value}</div>
+const MetricCard: React.FC<MetricCardProps> = ({ label, value, detail, tone = 'default' }) => {
+  const { onMouseMove } = useCardSpotlight();
+  const animatedValue = useCountUp(value);
+  return (
+    <div
+      onMouseMove={onMouseMove}
+      className={`surface-card bg-white dark:bg-[#121316] border rounded-xl p-4 flex flex-col justify-between ${
+        tone === 'negative'
+          ? 'border-amber-300 dark:border-amber-700/50'
+          : 'border-zinc-200/90 dark:border-zinc-800/80'
+      }`}
+    >
+      <div>
+        <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">{label}</div>
+        <div className={`text-2xl font-semibold font-mono tabular-nums tracking-tight ${
+          tone === 'negative' ? 'text-amber-800 dark:text-amber-300' : 'text-zinc-950 dark:text-zinc-50'
+        }`}>{animatedValue}</div>
+      </div>
+      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono">{detail}</div>
     </div>
-    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-2 font-mono">{detail}</div>
-  </div>
-);
+  );
+};
 
 export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
   const formatTokens = (value: number): string => {
@@ -39,7 +47,7 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
 
   if (monthView) {
     return (
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <section className="dashboard-enter grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6" style={{ animationDelay: '65ms' }}>
         <MetricCard
           label="Monthly Revenue"
           value={`$${formatUsd(summary.totalRevenueUsd, 2)}`}
@@ -82,7 +90,7 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary }) => {
   }
 
   return (
-    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+    <section className="dashboard-enter grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6" style={{ animationDelay: '65ms' }}>
       <MetricCard
         label="Total LLM Cost"
         value={`$${formatUsd(summary.totalCost)}`}

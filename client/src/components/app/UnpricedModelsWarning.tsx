@@ -14,7 +14,8 @@ export const UnpricedModelsWarning: React.FC<UnpricedModelsWarningProps> = ({ mo
   return (
     <section
       role="alert"
-      className="rounded-xl px-4 py-3 mb-4 border border-amber-300 dark:border-amber-700/50 bg-amber-50/70 dark:bg-amber-950/20 text-amber-950 dark:text-amber-200"
+      className="dashboard-enter rounded-xl px-4 py-3 mb-4 border border-amber-300 dark:border-amber-700/50 bg-amber-50/70 dark:bg-amber-950/20 text-amber-950 dark:text-amber-200"
+      style={{ animationDelay: '85ms' }}
     >
       <h2 className="text-xs font-semibold">
         {totalUnpriced} request{totalUnpriced === 1 ? '' : 's'} excluded from cost totals because the model pricing is unknown.
