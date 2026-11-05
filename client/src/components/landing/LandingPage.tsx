@@ -16,7 +16,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onOpenAuth }) => (
-  <div className="app-canvas min-h-screen font-sans text-zinc-900 dark:text-zinc-100">
+  <div className="app-canvas landing-canvas min-h-screen font-sans text-zinc-900 dark:text-zinc-100">
     <LandingNavbar onLaunchApp={onLaunchApp} onOpenAuth={onOpenAuth} />
     <main>
       <HeroSection onLaunchApp={onLaunchApp} />

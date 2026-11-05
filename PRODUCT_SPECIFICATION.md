@@ -1,6 +1,6 @@
 # Marginly — Product & Architecture Specification
 
-> **Status:** Current implementation, reviewed November 4, 2026. This document distinguishes working application behavior from static previews and future work.
+> **Status:** Current implementation, reviewed November 5, 2026. This document distinguishes working application behavior from static previews and future work.
 
 ## 1. Product summary
 
@@ -12,14 +12,21 @@ The product currently analyzes uploaded or pasted data. It does not collect usag
 
 ### Public landing page
 
-The active landing page contains:
+The public landing page is a responsive, theme-aware product overview. Its sections appear in this order:
 
-- A responsive header with theme control and Clerk sign-in.
-- A hero section with a small interactive margin calculator labeled “Illustrative example, not your data.” Its rates and results are not connected to imported account data or provider APIs.
-- A product dashboard preview with static sample figures.
-- A model-rate ticker and a footer.
+1. **Hero:** Explains customer-level LLM token cost analysis, with a primary upload CTA, a link to “How it works,” and a “Free during early access” badge. The primary CTA opens the dashboard for signed-in users or the sign-up flow for signed-out users.
+2. **How it works:** Describes exporting usage, uploading or pasting it, and reviewing cost and margin. It includes the accepted usage CSV column example and a downloadable template.
+3. **Product preview:** Shows static sample dashboard data, a customer breakdown, an unpriced-model warning, and a cost chart. Its highest-spend example bar uses a dark-blue highlight.
+4. **What you get:** Summarizes customer cost, spend share, spend concentration, unpriced-model visibility, monthly margin, and CSV export.
+5. **Supported models:** Lists the built-in model catalog rates by provider, with separate input/output text-token prices.
+6. **Your data:** Describes stored usage fields, clarifies that prompts and responses are not stored as usage records, and recommends anonymized customer IDs.
+7. **Final CTA and footer:** Provides the upload CTA, early-access badge, and real in-page links.
 
-The hero calculator and dashboard preview are marketing UI; they do not represent a live customer account or dashboard query.
+The sticky landing navbar has three centered section links (“How it works,” “Features,” and “Models”), the Marginly logo, a theme toggle, and a sign-in or dashboard action. Authenticated users also see their Clerk profile control. The navbar uses an inset, rounded glass treatment over the landing background.
+
+The hero contains a small interactive margin calculator labeled “Illustrative example, not your data.” It uses the shared built-in pricing catalog and an even split of input/output tokens for its estimate. Its values are illustrative only and are not connected to imported account data or provider APIs. The product preview also uses static sample figures and does not represent a live customer account or dashboard query.
+
+The supported-model list and calculator use the same built-in catalog as the server fallback catalog; they do not fetch a user's database-specific pricing rows. A “Give feedback” mail link appears in the final CTA and footer only when `VITE_FEEDBACK_EMAIL` is configured. The landing page does not include an FAQ section, pricing tiers, testimonials, customer logos, or claims of live ingestion.
 
 ### Authenticated dashboard
 
@@ -45,8 +52,11 @@ Other dashboard features:
 - Cost-only totals, top customer, active account count, token volume, and average cost per priced request in All time.
 - A top-three spend concentration indicator when there are at least eight customers; it flags a concentration risk at 70% or more of priced spend.
 - An unpriced-model warning listing unrecognized model names and request counts.
+- Unpriced-model and margin-overstatement notices use a dark-blue visual treatment; the warning meaning and cost-exclusion behavior are unchanged.
 - A chart of up to eight customers.
 - A customer table with search, sorting, spend-share filters, customer ID copying, and inline monthly revenue editing.
+
+The dashboard chart retains its amber highlight for the highest-spend customer. The static landing preview uses a dark-blue highlight instead; this is a presentation difference and does not affect chart data or dashboard behavior.
 
 ## 3. Authentication and data access
 
@@ -144,5 +154,7 @@ Marginly is an early functional MVP, not a production-scale or enterprise-ready 
 ## 9. Verification status
 
 For the November 3, 2026 hardening pass, the root production build completed successfully: client TypeScript/Vite build, Prisma Client generation, and server TypeScript compilation. An unauthenticated route check returned HTTP 401 for all eight `/api` endpoints and HTTP 200 for `/health`.
+
+The November 5, 2026 landing-page and dashboard presentation updates passed the client TypeScript check and Vite production build.
 
 These checks verify compilation and the tested authentication boundary; they do not constitute a full production deployment, external database migration, load test, or security certification.

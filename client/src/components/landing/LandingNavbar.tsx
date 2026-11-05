@@ -9,6 +9,12 @@ interface LandingNavbarProps {
   onOpenAuth: () => void;
 }
 
+const NAV_LINKS = [
+  ['How it works', '#how-it-works'],
+  ['Features', '#features'],
+  ['Models', '#models']
+];
+
 export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onLaunchApp, onOpenAuth }) => {
   const { theme, toggleTheme } = useTheme();
   const { isAuthenticated } = useAuth();
@@ -22,13 +28,13 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onLaunchApp, onOpe
   }, []);
 
   return (
-    <header className={`sticky top-0 z-50 border-b bg-white/96 backdrop-blur-md transition-[background-color,border-color] duration-200 dark:bg-[#0c0d0f]/96 ${
-      scrolled
-        ? 'border-zinc-200/80 dark:border-zinc-800/80'
-        : 'border-transparent'
-    }`}>
-      <div className="flex w-full items-center justify-between gap-4 px-5 py-2.5 sm:px-8 lg:px-12 xl:px-16">
-        <a href="#top" className="inline-flex min-h-9 shrink-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
+    <header className="landing-navbar sticky top-0 z-50 px-4 pb-2.5 pt-3 sm:px-6 sm:pt-5">
+      <div className={`landing-navbar-panel mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto] items-center gap-4 rounded-2xl border px-4 py-3.5 transition-colors duration-200 sm:px-6 md:grid-cols-[1fr_auto_1fr] ${
+        scrolled
+          ? 'border-zinc-200/60 dark:border-white/15'
+          : 'border-zinc-200/40 dark:border-white/10'
+      }`}>
+        <a href="#top" className="inline-flex min-h-9 w-fit shrink-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 text-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" aria-hidden="true">
             <svg className="h-4 w-4 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -37,7 +43,19 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onLaunchApp, onOpe
           <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Marginly</span>
         </a>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2.5 sm:gap-3">
+        <nav aria-label="Page sections" className="hidden items-center justify-center gap-5 md:flex lg:gap-7">
+          {NAV_LINKS.map(([label, href]) => (
+            <a
+              key={href}
+              href={href}
+              className="rounded-sm py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:text-zinc-400 dark:hover:text-zinc-100"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="col-start-2 flex shrink-0 items-center justify-end gap-2.5 sm:gap-3 md:col-start-3">
           <button
             type="button"
             onClick={toggleTheme}

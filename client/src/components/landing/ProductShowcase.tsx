@@ -102,7 +102,7 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onLaunchApp })
       <div className="mt-7 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:p-5">
         <KpiGrid summary={SAMPLE_SUMMARY} />
         <UnpricedModelsWarning models={SAMPLE_SUMMARY.unpricedModels} month={SAMPLE_SUMMARY.month} />
-        <CostChart customers={SAMPLE_CUSTOMERS} />
+        <CostChart customers={SAMPLE_CUSTOMERS} highlightColor="#1e40af" />
 
         <div className="surface-card overflow-hidden rounded-xl border border-zinc-200/90 bg-white dark:border-zinc-800/80 dark:bg-[#121316]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">

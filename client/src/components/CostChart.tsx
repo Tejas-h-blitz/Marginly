@@ -16,6 +16,7 @@ import { useCardSpotlight } from '../hooks/useUiEffects.js';
 
 interface CostChartProps {
   customers: CustomerBreakdown[];
+  highlightColor?: string;
 }
 
 interface TooltipPayloadItem {
@@ -64,7 +65,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
   return null;
 };
 
-export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
+export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor = '#f59e0b' }) => {
   const { theme } = useTheme();
   const [activeBar, setActiveBar] = useState<number | null>(null);
   const { onMouseMove } = useCardSpotlight();
@@ -83,8 +84,6 @@ export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
   const axisColor = isDark ? '#71717a' : '#71717a';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)';
   const barNeutral = isDark ? '#3f3f46' : '#a1a1aa';
-  const barWhale = '#f59e0b'; // Amber accent for top whale account
-
   return (
     <section
       onMouseMove={onMouseMove}
@@ -97,7 +96,7 @@ export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
             Customer Cost Distribution
           </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Top accounts ranked by gross LLM expenditure • Amber indicates the primary whale account
+            Top accounts ranked by gross LLM expenditure • Highlighted bar indicates the highest-spend account
           </p>
         </div>
         <div className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
@@ -135,7 +134,7 @@ export const CostChart: React.FC<CostChartProps> = ({ customers }) => {
               {chartData.map((_, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={index === 0 ? barWhale : barNeutral}
+                  fill={index === 0 ? highlightColor : barNeutral}
                   fillOpacity={activeBar === null || activeBar === index ? 1 : 0.35}
                   className="chart-bar-enter"
                   style={{ animationDelay: `${index * 55}ms` }}

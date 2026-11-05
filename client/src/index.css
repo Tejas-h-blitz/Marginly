@@ -67,7 +67,28 @@
       radial-gradient(rgb(161 161 170 / 0.2) 0.65px, transparent 0.65px);
   }
 
-  .app-canvas > header {
+  .landing-canvas::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(ellipse at 18% 22%, rgb(228 228 231 / 0.24), transparent 54%),
+      radial-gradient(ellipse at 82% 72%, rgb(244 244 245 / 0.28), transparent 52%),
+      radial-gradient(rgb(113 113 122 / 0.13) 0.7px, transparent 0.7px);
+    background-size: 100% 100%, 100% 100%, 24px 24px;
+    mask-image: linear-gradient(to bottom, black 0%, black 76%, transparent 100%);
+  }
+
+  .dark .landing-canvas::after {
+    background-image:
+      radial-gradient(ellipse at 18% 22%, rgb(63 63 70 / 0.32), transparent 56%),
+      radial-gradient(ellipse at 82% 72%, rgb(39 39 42 / 0.34), transparent 52%),
+      radial-gradient(rgb(161 161 170 / 0.11) 0.7px, transparent 0.7px);
+  }
+
+  .app-canvas > header:not(.landing-navbar) {
     position: sticky;
     top: 0;
     z-index: 50;
@@ -76,7 +97,19 @@
     backdrop-filter: blur(12px);
   }
 
-  .dark .app-canvas > header {
+  .landing-navbar-panel {
+    background: rgb(250 250 250 / 0.62);
+    backdrop-filter: blur(16px) saturate(125%);
+    box-shadow: inset 0 1px rgb(255 255 255 / 0.45), 0 8px 28px rgb(9 9 11 / 0.06);
+  }
+
+  .dark .landing-navbar-panel {
+    background:
+      linear-gradient(115deg, rgb(39 39 42 / 0.48), rgb(24 24 27 / 0.56) 58%, rgb(39 39 42 / 0.4));
+    box-shadow: inset 0 1px rgb(255 255 255 / 0.08), 0 10px 30px rgb(0 0 0 / 0.18);
+  }
+
+  .dark .app-canvas > header:not(.landing-navbar) {
     background-color: rgb(12 13 15 / 0.96);
   }
 
@@ -156,19 +189,7 @@
   }
 
   .landing-hero-grid {
-    background-image:
-      radial-gradient(ellipse at 18% 22%, rgb(228 228 231 / 0.42), transparent 54%),
-      radial-gradient(ellipse at 82% 72%, rgb(244 244 245 / 0.48), transparent 52%),
-      radial-gradient(rgb(113 113 122 / 0.13) 0.7px, transparent 0.7px);
-    background-size: 100% 100%, 100% 100%, 24px 24px;
-    mask-image: linear-gradient(to bottom, black 0%, black 76%, transparent 100%);
-  }
-
-  .dark .landing-hero-grid {
-    background-image:
-      radial-gradient(ellipse at 18% 22%, rgb(63 63 70 / 0.32), transparent 56%),
-      radial-gradient(ellipse at 82% 72%, rgb(39 39 42 / 0.34), transparent 52%),
-      radial-gradient(rgb(161 161 170 / 0.11) 0.7px, transparent 0.7px);
+    display: none;
   }
 
   .landing-highlight-section {
