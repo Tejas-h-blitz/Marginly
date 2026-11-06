@@ -1,6 +1,6 @@
 # Marginly — Product & Architecture Specification
 
-> **Status:** Current implementation, reviewed November 5, 2026. This document distinguishes working application behavior from static previews and future work.
+> **Status:** Current implementation, reviewed November 6, 2026. This document distinguishes working application behavior from static previews and future work.
 
 ## 1. Product summary
 
@@ -22,9 +22,9 @@ The public landing page is a responsive, theme-aware product overview. Its secti
 6. **Your data:** Describes stored usage fields, clarifies that prompts and responses are not stored as usage records, and recommends anonymized customer IDs.
 7. **Final CTA and footer:** Provides the upload CTA, early-access badge, and real in-page links.
 
-The sticky landing navbar has three centered section links (“How it works,” “Features,” and “Models”), the Marginly logo, a theme toggle, and a sign-in or dashboard action. Authenticated users also see their Clerk profile control. The navbar uses an inset, rounded glass treatment over the landing background.
+The sticky landing navbar has three centered section links (“How it works,” “Features,” and “Models”), the theme-aware Marginly logo, a theme toggle, and a sign-in or dashboard action. Authenticated users also see their Clerk profile control. The navbar uses an inset, rounded glass treatment over the landing background. The footer also uses the theme-aware brand logo.
 
-The hero contains a small interactive margin calculator labeled “Illustrative example, not your data.” It uses the shared built-in pricing catalog and an even split of input/output tokens for its estimate. Its values are illustrative only and are not connected to imported account data or provider APIs. The product preview also uses static sample figures and does not represent a live customer account or dashboard query.
+The hero uses a balanced, responsive headline aligned with its supporting copy, a primary upload button, a “See how it works” link, and an early-access badge. It also contains a small interactive margin calculator labeled “Illustrative example, not your data.” The calculator uses the shared built-in pricing catalog and an even split of input/output tokens for its estimate. Its values are illustrative only and are not connected to imported account data or provider APIs. The product preview also uses static sample figures and does not represent a live customer account or dashboard query.
 
 The supported-model list and calculator use the same built-in catalog as the server fallback catalog; they do not fetch a user's database-specific pricing rows. A “Give feedback” mail link appears in the final CTA and footer only when `VITE_FEEDBACK_EMAIL` is configured. The landing page does not include an FAQ section, pricing tiers, testimonials, customer logos, or claims of live ingestion.
 
@@ -56,7 +56,7 @@ Other dashboard features:
 - A chart of up to eight customers.
 - A customer table with search, sorting, spend-share filters, customer ID copying, and inline monthly revenue editing.
 
-The dashboard chart retains its amber highlight for the highest-spend customer. The static landing preview uses a dark-blue highlight instead; this is a presentation difference and does not affect chart data or dashboard behavior.
+The dashboard navigation uses the theme-aware Marginly logo in a rounded glass panel and retains its existing theme, account, and action controls without the former “SaaS Instrument” label. The dashboard chart retains its amber highlight for the highest-spend customer. The static landing preview uses a dark-blue highlight instead; this is a presentation difference and does not affect chart data or dashboard behavior.
 
 ## 3. Authentication and data access
 
@@ -155,6 +155,6 @@ Marginly is an early functional MVP, not a production-scale or enterprise-ready 
 
 For the November 3, 2026 hardening pass, the root production build completed successfully: client TypeScript/Vite build, Prisma Client generation, and server TypeScript compilation. An unauthenticated route check returned HTTP 401 for all eight `/api` endpoints and HTTP 200 for `/health`.
 
-The November 5, 2026 landing-page and dashboard presentation updates passed the client TypeScript check and Vite production build.
+The November 5–6, 2026 landing-page and dashboard presentation updates passed the client TypeScript check and Vite production build.
 
 These checks verify compilation and the tested authentication boundary; they do not constitute a full production deployment, external database migration, load test, or security certification.

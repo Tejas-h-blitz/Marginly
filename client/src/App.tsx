@@ -335,11 +335,8 @@ function MainAppContent() {
             {/* Action Bar */}
             <div className="dashboard-enter surface-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-[#121316] border border-zinc-200/90 dark:border-zinc-800/80 p-4 rounded-xl" style={{ animationDelay: '0ms' }}>
               <div>
-                <h1 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <span>Customer Cost &amp; Unit Economics</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200/80 dark:border-zinc-700/60 font-medium">
-                    Active Instrument
-                  </span>
+                <h1 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                  Customer Cost &amp; Unit Economics
                 </h1>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                   Per-account LLM expenditure audit, power user detection, and margin protection.

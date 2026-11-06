@@ -3,6 +3,7 @@ import { UserButton } from '@clerk/react';
 import { useAuth } from '../../context/AuthContext.js';
 import { useTheme } from '../../context/ThemeContext.js';
 import { isClerkConfigured } from '../../context/ClerkProviderWrapper.js';
+import { BrandLogo } from '../BrandLogo.js';
 
 interface LandingNavbarProps {
   onLaunchApp: () => void;
@@ -34,13 +35,8 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onLaunchApp, onOpe
           ? 'border-zinc-200/60 dark:border-white/15'
           : 'border-zinc-200/40 dark:border-white/10'
       }`}>
-        <a href="#top" className="inline-flex min-h-9 w-fit shrink-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 text-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" aria-hidden="true">
-            <svg className="h-4 w-4 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </span>
-          <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Marginly</span>
+        <a href="#top" aria-label="Marginly home" className="inline-flex min-h-9 w-fit shrink-0 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
+          <BrandLogo className="w-[100px] sm:w-[110px]" />
         </a>
 
         <nav aria-label="Page sections" className="hidden items-center justify-center gap-5 md:flex lg:gap-7">

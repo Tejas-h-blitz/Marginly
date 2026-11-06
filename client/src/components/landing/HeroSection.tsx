@@ -29,23 +29,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp }) => {
   return (
     <section id="top" className="landing-hero relative isolate overflow-hidden border-b border-zinc-200/80 dark:border-zinc-800/80">
       <div className="landing-hero-grid pointer-events-none absolute inset-0 -z-10" aria-hidden="true" />
-      <div className="mx-auto grid min-h-[min(900px,calc(100svh-4rem))] max-w-6xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:py-20">
-        <div className="hero-enter max-w-2xl">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/80 px-3 py-1 text-[10px] font-medium text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-            Customer-level LLM cost visibility
-          </div>
-          <h1 className="text-3xl font-semibold leading-[1.12] tracking-[-0.04em] text-zinc-950 dark:text-zinc-50 sm:text-4xl lg:text-5xl">
+      <div className="mx-auto grid min-h-[min(900px,calc(100svh-4rem))] max-w-6xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1.12fr_0.88fr] lg:gap-14 lg:py-20">
+        <div className="hero-enter max-w-xl text-left">
+          <h1 className="hero-title text-left text-[2rem] font-semibold leading-[1.16] tracking-[-0.03em] text-zinc-950 dark:text-zinc-50 sm:text-[2.5rem] lg:text-[3.25rem]">
             See which customers cost you the most in LLM tokens.
           </h1>
           <p className="mt-5 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400 sm:text-base sm:leading-7">
             Upload your usage logs, add what each customer pays, and see who&apos;s costing you money. No SDK, no API keys.
           </p>
-          <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={onLaunchApp}
-              className="interaction-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-[13px] font-medium text-white shadow-sm hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:w-auto"
+              className="interaction-button inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-[13px] font-medium text-white shadow-sm hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white sm:w-auto"
             >
               Upload your usage CSV
               <span aria-hidden="true">→</span>
@@ -57,13 +53,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp }) => {
             >
               See how it works
             </button>
-          </div>
-          <div className="mt-3">
             <span className="inline-flex rounded-full border border-zinc-200 bg-white/70 px-2.5 py-1 text-[10px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400">
               Free during early access
             </span>
           </div>
-          <ul className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs text-zinc-500 dark:text-zinc-400">
             <li>CSV upload or paste</li>
             <li>Monthly margin view</li>
             <li>Exportable reports</li>

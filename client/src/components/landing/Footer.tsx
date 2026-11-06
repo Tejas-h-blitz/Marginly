@@ -1,4 +1,5 @@
 import React from 'react';
+import { BrandLogo } from '../BrandLogo.js';
 
 interface FooterProps {
   feedbackHref: string | null;
@@ -9,13 +10,8 @@ export const Footer: React.FC<FooterProps> = ({ feedbackHref }) => (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <a href="#top" className="inline-flex items-center gap-2 rounded-md text-sm font-semibold tracking-tight text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:text-zinc-100">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 text-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" aria-hidden="true">
-              <svg className="h-4 w-4 stroke-current fill-none stroke-[2.2]" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            </span>
-            Marginly
+          <a href="#top" aria-label="Marginly home" className="inline-flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
+            <BrandLogo className="w-[104px]" />
           </a>
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Customer-level cost analysis from imported usage logs.</p>
         </div>

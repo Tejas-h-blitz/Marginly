@@ -88,7 +88,7 @@
       radial-gradient(rgb(161 161 170 / 0.11) 0.7px, transparent 0.7px);
   }
 
-  .app-canvas > header:not(.landing-navbar) {
+  .app-canvas > header:not(.landing-navbar):not(.dashboard-navbar) {
     position: sticky;
     top: 0;
     z-index: 50;
@@ -97,19 +97,21 @@
     backdrop-filter: blur(12px);
   }
 
-  .landing-navbar-panel {
+  .landing-navbar-panel,
+  .dashboard-navbar-panel {
     background: rgb(250 250 250 / 0.62);
     backdrop-filter: blur(16px) saturate(125%);
     box-shadow: inset 0 1px rgb(255 255 255 / 0.45), 0 8px 28px rgb(9 9 11 / 0.06);
   }
 
-  .dark .landing-navbar-panel {
+  .dark .landing-navbar-panel,
+  .dark .dashboard-navbar-panel {
     background:
       linear-gradient(115deg, rgb(39 39 42 / 0.48), rgb(24 24 27 / 0.56) 58%, rgb(39 39 42 / 0.4));
     box-shadow: inset 0 1px rgb(255 255 255 / 0.08), 0 10px 30px rgb(0 0 0 / 0.18);
   }
 
-  .dark .app-canvas > header:not(.landing-navbar) {
+  .dark .app-canvas > header:not(.landing-navbar):not(.dashboard-navbar) {
     background-color: rgb(12 13 15 / 0.96);
   }
 
@@ -171,6 +173,10 @@
 
   .hero-enter {
     animation: fade-rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .hero-title {
+    text-wrap: balance;
   }
 
   .landing-section-enter {
