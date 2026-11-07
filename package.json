@@ -10,6 +10,9 @@
     "build:server": "npm run build --prefix server",
     "build:client": "npm run build --prefix client",
     "build": "npm run build:client && npm run prisma:generate --prefix server && npm run build:server",
-    "start": "npm run start --prefix server"
+    "start": "npm run start --prefix server",
+    "start:test": "npm run start:test --prefix server",
+    "test:e2e": "node test-e2e.mjs",
+    "test:security": "node test-auth-security.mjs"
   }
 }

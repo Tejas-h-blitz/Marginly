@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -30,35 +31,63 @@ function getRequestedMonth(req: Request): string | undefined {
   return validateMonth(req.query.month);
 }
 
+export function verifyTestAuthToken(token: string, secret: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+    const [headerB64, payloadB64, signature] = parts;
+
+    // Cryptographically verify HMAC-SHA256 signature using TEST_AUTH_SECRET
+    const expectedSig = crypto
+      .createHmac('sha256', secret)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
+
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!payload || typeof payload.sub !== 'string') {
+      return null;
+    }
+
+    // Check expiration timestamp
+    if (payload.exp && typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now()) {
+      return null;
+    }
+
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
 export function getAuthenticatedUserId(req: Request): string | null {
-  // 1. Official Clerk middleware auth
+  // 1. In normal operation, only Clerk-verified sessions are accepted
   try {
     const auth = getAuth(req);
     if (auth?.userId) {
       return auth.userId;
     }
   } catch (err) {
-    console.warn('[Auth] Clerk getAuth threw:', err);
+    // Clerk verification failed
   }
 
-  // 2. Fallback: Inspect Authorization Bearer token from header
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token) {
-      try {
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-          if (payload && typeof payload.sub === 'string' && payload.sub.startsWith('user_')) {
-            // Verify expiration timestamp if present
-            if (!payload.exp || payload.exp * 1000 > Date.now()) {
-              return payload.sub;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[Auth] Bearer payload decode failed:', err);
+  // 2. Test bypass: permitted ONLY when NODE_ENV === 'test' AND an explicit TEST_AUTH_SECRET is set.
+  if (
+    process.env.NODE_ENV === 'test' &&
+    process.env.TEST_AUTH_SECRET
+  ) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      if (token) {
+        return verifyTestAuthToken(token, process.env.TEST_AUTH_SECRET);
       }
     }
   }

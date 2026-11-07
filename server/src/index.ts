@@ -9,6 +9,12 @@ import { prisma } from './db.js';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+// Security startup guard: refuse to start if test bypass is enabled in production
+if (process.env.TEST_AUTH_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('[Security] FATAL: TEST_AUTH_SECRET cannot be enabled when NODE_ENV=production. Server refusing to start.');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
@@ -68,6 +74,9 @@ import { checkConnection } from './db.js';
 let server: ReturnType<typeof app.listen>;
 
 async function startServer() {
+  if (process.env.TEST_AUTH_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('[Security] FATAL: TEST_AUTH_SECRET cannot be enabled when NODE_ENV=production. Server refusing to start.');
+  }
   await checkConnection();
 
   server = app.listen(PORT, '0.0.0.0', () => {
