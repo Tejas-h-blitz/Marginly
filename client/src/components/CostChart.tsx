@@ -92,14 +92,17 @@ export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor 
     >
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
         <div>
-          <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <svg className="w-4 h-4 text-zinc-500 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            </svg>
             Customer Cost Distribution
           </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Top accounts ranked by gross LLM expenditure • Highlighted bar indicates the highest-spend account
+            Top accounts ranked by gross LLM expenditure • Highlighted bar indicates highest-spend account
           </p>
         </div>
-        <div className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
+        <div className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
           Showing top {chartData.length} of {customers.length} accounts
         </div>
       </div>
@@ -130,13 +133,13 @@ export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor 
               tickLine={{ stroke: gridColor }}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? '#27272a' : '#f4f4f5', opacity: 0.45 }} />
-            <Bar dataKey="totalCost" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>
+            <Bar dataKey="totalCost" radius={[0, 6, 6, 0]} barSize={18} isAnimationActive={false}>
               {chartData.map((_, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={index === 0 ? highlightColor : barNeutral}
                   fillOpacity={activeBar === null || activeBar === index ? 1 : 0.35}
-                  className="chart-bar-enter"
+                  className="chart-bar-enter cursor-pointer transition-opacity"
                   style={{ animationDelay: `${index * 55}ms` }}
                   onMouseEnter={() => setActiveBar(index)}
                   onMouseLeave={() => setActiveBar(null)}

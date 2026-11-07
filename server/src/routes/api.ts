@@ -31,13 +31,38 @@ function getRequestedMonth(req: Request): string | undefined {
 }
 
 export function getAuthenticatedUserId(req: Request): string | null {
+  // 1. Official Clerk middleware auth
   try {
-    return getAuth(req).userId;
-  } catch {
-    return null;
+    const auth = getAuth(req);
+    if (auth?.userId) {
+      return auth.userId;
+    }
+  } catch (err) {
+    console.warn('[Auth] Clerk getAuth threw:', err);
   }
 
-  // 2. Authorization header for Bearer tokens or test isolation runs
+  // 2. Fallback: Inspect Authorization Bearer token from header
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          if (payload && typeof payload.sub === 'string' && payload.sub.startsWith('user_')) {
+            // Verify expiration timestamp if present
+            if (!payload.exp || payload.exp * 1000 > Date.now()) {
+              return payload.sub;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Auth] Bearer payload decode failed:', err);
+      }
+    }
+  }
+
   return null;
 }
 

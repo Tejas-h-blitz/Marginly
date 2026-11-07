@@ -42,7 +42,7 @@ const INITIAL_SUMMARY: UsageSummary = {
 };
 
 function MainAppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, getToken } = useAuth();
   const [currentView, setCurrentView] = useState<'landing' | 'app'>('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>('signin');
@@ -71,18 +71,21 @@ function MainAppContent() {
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const headers: Record<string, string> = {};
     try {
-      if ((window as any).Clerk?.session) {
-        const token = await (window as any).Clerk.session.getToken();
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
+      const token = await getToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else if ((window as any).Clerk?.session) {
+        const windowToken = await (window as any).Clerk.session.getToken();
+        if (windowToken) {
+          headers['Authorization'] = `Bearer ${windowToken}`;
         }
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn('Failed to retrieve authentication token:', err);
     }
 
     return headers;
-  }, []);
+  }, [getToken]);
 
   const loadData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -90,8 +93,8 @@ function MainAppContent() {
       const authHeaders = await getAuthHeaders();
       const monthQuery = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : '';
       const [summaryRes, customersRes] = await Promise.all([
-        fetch(`/api/summary${monthQuery}`, { headers: authHeaders }),
-        fetch(`/api/customers${monthQuery}`, { headers: authHeaders })
+        fetch(`/api/summary${monthQuery}`, { headers: authHeaders, credentials: 'include' }),
+        fetch(`/api/customers${monthQuery}`, { headers: authHeaders, credentials: 'include' })
       ]);
 
       if (summaryRes.ok) {
@@ -113,7 +116,7 @@ function MainAppContent() {
     if (!isAuthenticated) return;
     try {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch('/api/pricing', { headers: authHeaders });
+      const res = await fetch('/api/pricing', { headers: authHeaders, credentials: 'include' });
       if (res.ok) {
         const data: PricingResponse = await res.json();
         setPricing(data.models);
@@ -149,7 +152,8 @@ function MainAppContent() {
       const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/load-sample', {
         method: 'POST',
-        headers: authHeaders
+        headers: authHeaders,
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load sample');
@@ -168,7 +172,7 @@ function MainAppContent() {
     try {
       const authHeaders = await getAuthHeaders();
       const monthQuery = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : '';
-      const res = await fetch(`/api/export${monthQuery}`, { headers: authHeaders });
+      const res = await fetch(`/api/export${monthQuery}`, { headers: authHeaders, credentials: 'include' });
       if (!res.ok) throw new Error('Failed to export CSV');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -193,6 +197,7 @@ function MainAppContent() {
       const res = await fetch(`/api/customers/${encodeURIComponent(customerId)}/revenue`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
+        credentials: 'include',
         body: JSON.stringify({ monthly_revenue_usd: value })
       });
       const data = await res.json();
@@ -215,6 +220,7 @@ function MainAppContent() {
       const res = await fetch('/api/revenue/import', {
         method: 'POST',
         headers: authHeaders,
+        credentials: 'include',
         body: formData
       });
       const data = await res.json();
@@ -236,7 +242,8 @@ function MainAppContent() {
       const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/clear', {
         method: 'POST',
-        headers: authHeaders
+        headers: authHeaders,
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to clear usage data.');
@@ -261,6 +268,7 @@ function MainAppContent() {
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: authHeaders,
+        credentials: 'include',
         body: formData
       });
       const data = await res.json();
@@ -292,6 +300,7 @@ function MainAppContent() {
           'Content-Type': 'application/json',
           ...authHeaders
         },
+        credentials: 'include',
         body: JSON.stringify({ content, format })
       });
       const data = await res.json();

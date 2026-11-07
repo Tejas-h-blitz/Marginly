@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useClerk, useUser } from '@clerk/react';
+import { useClerk, useUser, useAuth as useClerkAuth } from '@clerk/react';
 import { User, Workspace } from '../types/index.js';
 import { isClerkConfigured } from './ClerkProviderWrapper.js';
 
@@ -8,6 +8,7 @@ interface AuthContextType {
   workspace: Workspace;
   isAuthenticated: boolean;
   logout: () => Promise<void>;
+  getToken: () => Promise<string | null>;
   setWorkspace: (workspace: Workspace) => void;
 }
 
@@ -28,6 +29,7 @@ interface AuthStateProps {
 const ClerkAuthState: React.FC<AuthStateProps> = ({ children, workspace, setWorkspace }) => {
   const { isSignedIn, user: clerkUser } = useUser();
   const { signOut } = useClerk();
+  const { getToken } = useClerkAuth();
   const user: User | null = clerkUser
     ? {
         id: clerkUser.id,
@@ -46,6 +48,7 @@ const ClerkAuthState: React.FC<AuthStateProps> = ({ children, workspace, setWork
         workspace,
         isAuthenticated: isSignedIn === true,
         logout: () => signOut(),
+        getToken: () => getToken(),
         setWorkspace
       }}
     >
@@ -84,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         workspace,
         isAuthenticated: false,
         logout: async () => {},
+        getToken: async () => null,
         setWorkspace
       }}
     >

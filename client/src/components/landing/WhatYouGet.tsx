@@ -3,23 +3,27 @@ import React from 'react';
 const OUTPUTS = [
   {
     title: 'Cost per customer',
-    description: 'Compare priced usage costs across your customer IDs.'
+    description: 'Compare priced usage costs across individual customer IDs with zero SDK setup.'
   },
   {
     title: 'Spend share',
-    description: 'See how much of total priced cost each customer represents.'
+    description: 'See the exact percentage of your total LLM expenditure that each customer represents.'
   },
   {
     title: 'Concentration flag',
-    description: 'Spot when a small number of customers account for most priced spend.'
+    description: 'Spot when a small number of whale customers account for most of your priced spend.'
   },
   {
-    title: 'Unpriced-model warning',
-    description: 'See unknown model names and request counts instead of guessed costs.'
+    title: 'Unpriced-model visibility',
+    description: 'See unrecognized model names and request counts instead of guessed or missing costs.'
   },
   {
-    title: 'Monthly margin and CSV export',
-    description: 'Add monthly revenue, compare it with priced costs, and export a customer breakdown.'
+    title: 'Monthly margin audit',
+    description: 'Add customer revenue to track blended gross margins and uncover unprofitable accounts.'
+  },
+  {
+    title: 'CSV export reports',
+    description: 'Download full customer breakdowns with tokens, costs, revenue, and margins in one click.'
   }
 ];
 

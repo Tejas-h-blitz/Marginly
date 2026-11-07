@@ -3,6 +3,7 @@ import { CostChart } from '../CostChart.js';
 import { KpiGrid } from '../KpiGrid.js';
 import { UnpricedModelsWarning } from '../app/UnpricedModelsWarning.js';
 import { CustomerBreakdown, UsageSummary } from '../../types/index.js';
+import { useTheme } from '../../context/ThemeContext.js';
 
 interface ProductShowcaseProps {
   onLaunchApp: () => void;
@@ -83,26 +84,30 @@ const CALLOUTS = [
   'CSV export'
 ];
 
-export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onLaunchApp }) => (
-  <section id="preview" className="landing-preview landing-section-enter scroll-mt-24 border-b border-zinc-200/80 py-16 dark:border-zinc-800/80 sm:py-20">
-    <div className="mx-auto max-w-6xl px-4 sm:px-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="max-w-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">A look inside Marginly</p>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">Customer costs, in context</h2>
-          <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            These example values are illustrative. The preview uses the same dashboard KPI and chart components as the app.
-          </p>
-        </div>
-        <span className="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 font-mono text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-          Sample data
-        </span>
-      </div>
+export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onLaunchApp }) => {
+  const { theme } = useTheme();
+  const highlightColor = theme === 'dark' ? '#ffffff' : '#18181b';
 
-      <div className="mt-7 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:p-5">
-        <KpiGrid summary={SAMPLE_SUMMARY} />
-        <UnpricedModelsWarning models={SAMPLE_SUMMARY.unpricedModels} month={SAMPLE_SUMMARY.month} />
-        <CostChart customers={SAMPLE_CUSTOMERS} highlightColor="#1e40af" />
+  return (
+    <section id="preview" className="landing-preview landing-section-enter scroll-mt-24 border-b border-zinc-200/80 py-16 dark:border-zinc-800/80 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div className="max-w-2xl">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">A look inside Marginly</p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">Customer costs, in context</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              These example values are illustrative. The preview uses the same dashboard KPI and chart components as the app.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 font-mono text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+            Sample data
+          </span>
+        </div>
+
+        <div className="mt-7 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:p-5">
+          <KpiGrid summary={SAMPLE_SUMMARY} />
+          <UnpricedModelsWarning models={SAMPLE_SUMMARY.unpricedModels} month={SAMPLE_SUMMARY.month} />
+          <CostChart customers={SAMPLE_CUSTOMERS} highlightColor={highlightColor} />
 
         <div className="surface-card overflow-hidden rounded-xl border border-zinc-200/90 bg-white dark:border-zinc-800/80 dark:bg-[#121316]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
@@ -155,4 +160,5 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onLaunchApp })
       </div>
     </div>
   </section>
-);
+  );
+};

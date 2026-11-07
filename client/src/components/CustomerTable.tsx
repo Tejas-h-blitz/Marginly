@@ -252,20 +252,32 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
               filtered.map((c, idx) => {
                 const rank = idx + 1;
                 const isWhale = compareMoney(c.percentOfTotal, '20') >= 0 || rank === 1;
+                const initials = c.customerId.replace(/^(cust_|acct_|user_)/, '').slice(0, 2).toUpperCase();
 
                 return (
                   <tr
                     key={c.customerId}
-                    className={`customer-row ${c.unprofitable ? 'is-unprofitable' : ''} hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30`}
+                    className={`customer-row ${c.unprofitable ? 'is-unprofitable bg-rose-500/[0.03] dark:bg-rose-500/[0.04]' : ''} hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors`}
                   >
                     {/* Rank */}
-                    <td className="py-2.5 px-3.5 text-center font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
-                      {rank}
+                    <td className="py-2.5 px-3.5 text-center font-mono text-[11px]">
+                      <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono text-[10px] ${
+                        rank === 1
+                          ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border border-amber-300/60 dark:border-amber-700/50'
+                          : rank <= 3
+                          ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold'
+                          : 'text-zinc-400 dark:text-zinc-500'
+                      }`}>
+                        {rank}
+                      </span>
                     </td>
 
-                    {/* Customer ID + Copy Button */}
+                    {/* Customer ID + Avatar Badge + Copy Button */}
                     <td className="py-2.5 px-3.5">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/60 flex items-center justify-center font-mono text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 shrink-0 select-none">
+                          {initials}
+                        </div>
                         <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100 text-xs">
                           {c.customerId}
                         </span>
@@ -273,7 +285,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                           type="button"
                           aria-label={copiedId === c.customerId ? 'Customer ID copied' : `Copy ${c.customerId}`}
                           onClick={() => copyToClipboard(c.customerId)}
-                          className={`copy-button relative inline-flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ${copiedId === c.customerId ? 'is-copied' : ''}`}
+                          className={`copy-button relative inline-flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${copiedId === c.customerId ? 'is-copied' : ''}`}
                           title="Copy Customer ID"
                         >
                           <svg className="copy-icon absolute h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -310,17 +322,17 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                     {/* Spend Share Inline Bar */}
                     <td className="py-2.5 px-3.5">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-zinc-100 dark:bg-zinc-800/80 rounded-full overflow-hidden p-0.5 border border-zinc-200/50 dark:border-zinc-700/40">
                           <div
-                            className={`h-full rounded-full ${
+                            className={`h-full rounded-full transition-all ${
                               isWhale
-                                ? 'bg-amber-500'
+                                ? 'bg-amber-500 dark:bg-amber-400'
                                 : 'bg-zinc-400 dark:bg-zinc-500'
                             } spend-share-fill`}
-                            style={{ width: `${Math.min(100, Math.max(3, Number(c.percentOfTotal)))}%` }}
+                            style={{ width: `${Math.min(100, Math.max(4, Number(c.percentOfTotal)))}%` }}
                           />
                         </div>
-                        <span className="text-[11px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400 min-w-[34px] text-right">
+                        <span className="text-[11px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400 min-w-[34px] text-right font-medium">
                           {formatPercent(c.percentOfTotal)}
                         </span>
                       </div>
@@ -335,7 +347,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                       <>
                         <td className="py-2 px-3.5">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-zinc-500 dark:text-zinc-400">$</span>
+                            <span className="text-zinc-400 dark:text-zinc-500 font-mono text-xs">$</span>
                             <input
                               aria-label={`Monthly revenue for ${c.customerId}`}
                               type="text"
@@ -349,7 +361,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                               onKeyDown={event => {
                                 if (event.key === 'Enter') event.currentTarget.blur();
                               }}
-                              className="w-24 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900/70 px-2 py-1 font-mono text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
+                              className="w-24 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900/80 px-2 py-1 font-mono text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 shadow-xs"
                             />
                             <button
                               type="button"
@@ -367,9 +379,9 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                                 }
                                 setSavingRevenueId(null);
                               }}
-                              className="text-[10px] font-medium text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100 disabled:opacity-50"
+                              className="px-2 py-1 rounded-md border border-zinc-200/80 dark:border-zinc-700/80 bg-zinc-50 dark:bg-zinc-800 text-[10px] font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white transition-colors disabled:opacity-50 shadow-xs"
                             >
-                              {savingRevenueId === c.customerId ? 'Saving' : 'Save'}
+                              {savingRevenueId === c.customerId ? 'Saving...' : 'Save'}
                             </button>
                           </div>
                         </td>
