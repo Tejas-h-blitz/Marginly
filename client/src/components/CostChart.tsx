@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { CustomerBreakdown } from '../types/index.js';
 import { useTheme } from '../context/ThemeContext.js';
-import { formatPercent, formatUsd } from '../money.js';
+import { formatFixedUsd, formatPercent } from '../money.js';
 import { useCardSpotlight } from '../hooks/useUiEffects.js';
 
 interface CostChartProps {
@@ -37,27 +37,27 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
         <div className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-1 mb-1">
           {data.customerId}
         </div>
-        <div className="flex justify-between gap-4 font-mono">
-          <span className="text-zinc-500">Spend:</span>
+        <div className="flex justify-between gap-4 font-mono text-xs">
+          <span className="text-zinc-600 dark:text-zinc-400">Spend:</span>
           <span className="font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
-            ${formatUsd(data.totalCost)} USD
+            ${formatFixedUsd(data.totalCost, 4)} USD
           </span>
         </div>
-        <div className="flex justify-between gap-4 font-mono">
-          <span className="text-zinc-500">Share:</span>
+        <div className="flex justify-between gap-4 font-mono text-xs">
+          <span className="text-zinc-600 dark:text-zinc-400">Share:</span>
           <span className="text-zinc-700 dark:text-zinc-300 tabular-nums">
-            {formatPercent(data.percentOfTotal)} of bill
+            {formatPercent(data.percentOfTotal, 1)} of total spend
           </span>
         </div>
-        <div className="flex justify-between gap-4 font-mono">
-          <span className="text-zinc-500">Volume:</span>
+        <div className="flex justify-between gap-4 font-mono text-xs">
+          <span className="text-zinc-600 dark:text-zinc-400">Volume:</span>
           <span className="text-zinc-700 dark:text-zinc-300 tabular-nums">
-            {data.totalTokens.toLocaleString()} tokens
+            {data.totalTokens.toLocaleString('en-US')} tokens
           </span>
         </div>
-        <div className="flex justify-between gap-4 font-mono text-[11px] text-zinc-400 dark:text-zinc-500 pt-0.5">
+        <div className="flex justify-between gap-4 font-mono text-xs text-zinc-600 dark:text-zinc-400 pt-0.5">
           <span>Avg / Req:</span>
-          <span className="tabular-nums">${formatUsd(data.avgCostPerRequest, 5)}</span>
+          <span className="tabular-nums">${formatFixedUsd(data.avgCostPerRequest, 4)}</span>
         </div>
       </div>
     );
@@ -65,7 +65,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
   return null;
 };
 
-export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor = '#f59e0b' }) => {
+export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor }) => {
   const { theme } = useTheme();
   const [activeBar, setActiveBar] = useState<number | null>(null);
   const { onMouseMove } = useCardSpotlight();
@@ -81,9 +81,10 @@ export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor 
   }));
 
   const isDark = theme === 'dark';
+  const effectiveHighlight = highlightColor ?? (isDark ? '#ffffff' : '#18181b');
   const axisColor = isDark ? '#71717a' : '#71717a';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)';
-  const barNeutral = isDark ? '#3f3f46' : '#a1a1aa';
+  const barNeutral = isDark ? '#27272a' : '#e4e4e7';
   return (
     <section
       onMouseMove={onMouseMove}
@@ -98,11 +99,11 @@ export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor 
             </svg>
             Customer Cost Distribution
           </h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
             Top accounts ranked by gross LLM expenditure • Highlighted bar indicates highest-spend account
           </p>
         </div>
-        <div className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
+        <div className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/60 dark:border-zinc-700/60">
           Showing top {chartData.length} of {customers.length} accounts
         </div>
       </div>
@@ -137,7 +138,7 @@ export const CostChart: React.FC<CostChartProps> = ({ customers, highlightColor 
               {chartData.map((_, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={index === 0 ? highlightColor : barNeutral}
+                  fill={index === 0 ? effectiveHighlight : barNeutral}
                   fillOpacity={activeBar === null || activeBar === index ? 1 : 0.35}
                   className="chart-bar-enter cursor-pointer transition-opacity"
                   style={{ animationDelay: `${index * 55}ms` }}

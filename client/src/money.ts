@@ -6,6 +6,14 @@ export function formatUsd(value: string | null, maximumFractionDigits = 4): stri
     : '—';
 }
 
+export function formatFixedUsd(value: string | number | null, decimals = 4): string {
+  if (value === null || value === undefined) return '—';
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? amount.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : '—';
+}
+
 export function formatPercent(value: string | null, maximumFractionDigits = 1): string {
   if (value === null) return '—';
   const percent = Number(value);

@@ -1,14 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImportSection } from '../ImportSection.js';
 import { InlineSpinner } from '../InlineSpinner.js';
 
 interface ImportDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadFile: (file: File) => void;
-  onPasteSubmit: (content: string, format: 'csv' | 'json') => void;
+  onUploadFile: (file: File) => Promise<boolean>;
+  onPasteSubmit: (content: string, format: 'csv' | 'json') => Promise<boolean>;
   onLoadSample: () => void;
-  onImportRevenue: (file: File) => void;
+  onImportRevenue: (file: File) => Promise<boolean>;
   loading: boolean;
 }
 
@@ -24,13 +24,17 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
   const closeButton = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const [drawerError, setDrawerError] = useState<{ message: string; rejectedRows?: string[] } | null>(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setDrawerError(null);
+      return;
+    }
     const previousOverflow = document.body.style.overflow;
     previousFocus.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -76,6 +80,24 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const handleUpload = async (file: File) => {
+    setDrawerError(null);
+    const success = await onUploadFile(file);
+    if (success) onClose();
+  };
+
+  const handlePaste = async (content: string, format: 'csv' | 'json') => {
+    setDrawerError(null);
+    const success = await onPasteSubmit(content, format);
+    if (success) onClose();
+  };
+
+  const handleRevenue = async (file: File) => {
+    setDrawerError(null);
+    const success = await onImportRevenue(file);
+    if (success) onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
@@ -92,7 +114,7 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
             <h3 id="import-drawer-title" className="text-base font-semibold tracking-tight text-zinc-900 dark:text-white">
               Upload Usage Logs
             </h3>
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 mt-1">
+            <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 mt-1">
               Upload your usage CSV, see which customers cost you the most in LLM tokens.
             </p>
           </div>
@@ -113,22 +135,22 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
         <div className="drawer-reveal rounded-xl border border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50/70 dark:bg-[#18191d]/80 p-4 sm:p-5 text-xs space-y-4 shadow-xs">
           <div>
             <h4 className="text-xs font-semibold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
-              <svg className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               First import? Start with a CSV template
             </h4>
             
             <div className="mt-2.5 space-y-1.5">
-              <div className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                 Usage schema columns:
               </div>
-              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">customer_id</span>
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">timestamp</span>
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">model_name</span>
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">input_tokens</span>
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">output_tokens</span>
+              <div className="flex flex-wrap gap-1 font-mono text-xs">
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">customer_id</span>
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">timestamp</span>
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">model_name</span>
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">input_tokens</span>
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">output_tokens</span>
               </div>
             </div>
 
@@ -136,9 +158,9 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
               <button
                 type="button"
                 onClick={() => downloadTemplate('marginly-usage-template.csv', 'customer_id,timestamp,model_name,input_tokens,output_tokens\ncustomer_001,2026-11-01T10:00:00Z,gpt-4o,1000,250\n')}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200/90 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/90 px-3 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200/90 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/90 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs"
               >
-                <svg className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 Download usage template
@@ -146,9 +168,9 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
               <button
                 type="button"
                 onClick={() => downloadTemplate('marginly-revenue-template.csv', 'customer_id,monthly_revenue_usd\ncustomer_001,499.00\n')}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200/90 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/90 px-3 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200/90 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/90 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs"
               >
-                <svg className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 Download revenue template
@@ -158,21 +180,21 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
 
           <div className="border-t border-zinc-200/70 dark:border-zinc-800/80 pt-3.5 space-y-2.5">
             <div className="space-y-1">
-              <div className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                 Revenue schema columns:
               </div>
-              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">customer_id</span>
-                <span className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300">monthly_revenue_usd</span>
+              <div className="flex flex-wrap gap-1 font-mono text-xs">
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">customer_id</span>
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200">monthly_revenue_usd</span>
               </div>
             </div>
 
             <div>
               <label
                 aria-disabled={loading}
-                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-white dark:bg-zinc-800/90 border border-zinc-200/90 dark:border-zinc-700/80 px-3 py-1.5 text-[11px] font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs ${loading ? 'pointer-events-none opacity-60' : ''}`}
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-white dark:bg-zinc-800/90 border border-zinc-200/90 dark:border-zinc-700/80 px-3 py-1.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs ${loading ? 'pointer-events-none opacity-60' : ''}`}
               >
-                <svg className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12" />
                 </svg>
                 <span>
@@ -186,7 +208,7 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
                   disabled={loading}
                   onChange={event => {
                     const file = event.target.files?.[0];
-                    if (file) onImportRevenue(file);
+                    if (file) handleRevenue(file);
                     event.currentTarget.value = '';
                   }}
                 />
@@ -194,12 +216,12 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
             </div>
           </div>
 
-          {/* Privacy & Anonymization Callout - White Text and Professional Theme */}
+          {/* Privacy & Anonymization Callout - White Text on Dark Elevated Card */}
           <div className="flex items-start gap-2.5 rounded-lg border border-zinc-300/80 dark:border-zinc-700/80 bg-zinc-900 dark:bg-zinc-800/90 px-3.5 py-2.5 shadow-xs">
             <svg className="w-4 h-4 shrink-0 text-zinc-300 dark:text-zinc-200 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <p className="text-[11px] leading-relaxed text-white font-normal">
+            <p className="text-xs leading-relaxed text-white font-normal">
               Use anonymized customer IDs (not emails or names). You can delete all your data at any time with Clear.
             </p>
           </div>
@@ -209,12 +231,12 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
         <div className="drawer-reveal flex items-center justify-between p-4 rounded-xl bg-zinc-50/80 dark:bg-[#18191d]/80 border border-zinc-200/90 dark:border-zinc-800/90 text-xs shadow-xs">
           <div className="space-y-0.5">
             <div className="font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               Want to see it in action instantly?
             </div>
-            <div className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <div className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
               Populates realistic multi-customer token data across 8 accounts.
             </div>
           </div>
@@ -233,15 +255,10 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
         {/* Ingestion Dropzone & Paste Component */}
         <div className="drawer-reveal">
           <ImportSection
-            onUploadFile={(file) => {
-              onUploadFile(file);
-              onClose();
-            }}
-            onPasteSubmit={(content, format) => {
-              onPasteSubmit(content, format);
-              onClose();
-            }}
+            onUploadFile={handleUpload}
+            onPasteSubmit={handlePaste}
             loading={loading}
+            externalError={drawerError}
           />
         </div>
       </div>

@@ -130,24 +130,24 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onLaunchApp }) => {
                 </select>
               </label>
 
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <div className="text-[10px] text-zinc-500">Revenue</div>
-                    <div className="mt-1 font-mono text-[13px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${monthlyRevenue}</div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3.5 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+                <div className="grid grid-cols-3 gap-2 text-center items-center">
+                  <div className="p-2 rounded-lg">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Revenue</div>
+                    <div className="mt-1 font-mono text-xs sm:text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${monthlyRevenue}</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-zinc-500">Est. model cost</div>
-                    <div className="mt-1 font-mono text-[13px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${estimatedCost.toFixed(2)}</div>
+                  <div className="p-2 rounded-lg">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Est. model cost</div>
+                    <div className="mt-1 font-mono text-xs sm:text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">${estimatedCost.toFixed(2)}</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-zinc-500">Est. margin</div>
-                    <div className={`mt-1 font-mono text-[13px] font-semibold tabular-nums ${unprofitable ? 'text-amber-800 dark:text-amber-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
+                  <div className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100/80 dark:bg-[#15171b] shadow-xs">
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">Est. margin</div>
+                    <div className={`mt-1 font-mono text-xs sm:text-sm font-bold tabular-nums ${unprofitable ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-950 dark:text-zinc-50'}`}>
                       {marginPercent}%
                     </div>
                   </div>
                 </div>
-                <p className="mt-3 border-t border-zinc-200 pt-2 text-center text-[10px] leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                <p className="mt-3 border-t border-zinc-200/80 pt-2 text-center text-xs leading-relaxed text-zinc-500 dark:border-zinc-800/80 dark:text-zinc-400">
                   Estimate assumes an even split of input and output tokens. Rates are for text tokens only.
                 </p>
               </div>

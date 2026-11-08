@@ -1,7 +1,7 @@
 import React from 'react';
 import { CostChart } from '../CostChart.js';
 import { KpiGrid } from '../KpiGrid.js';
-import { UnpricedModelsWarning } from '../app/UnpricedModelsWarning.js';
+import { DataQualityStrip } from '../app/DataQualityStrip.js';
 import { CustomerBreakdown, UsageSummary } from '../../types/index.js';
 import { useTheme } from '../../context/ThemeContext.js';
 
@@ -99,66 +99,76 @@ export const ProductShowcase: React.FC<ProductShowcaseProps> = ({ onLaunchApp })
               These example values are illustrative. The preview uses the same dashboard KPI and chart components as the app.
             </p>
           </div>
-          <span className="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 font-mono text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+          <span className="inline-flex w-fit items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 font-mono text-xs font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
             Sample data
           </span>
         </div>
 
-        <div className="mt-7 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:p-5">
+        <div className="mt-7 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 sm:p-5 space-y-4">
           <KpiGrid summary={SAMPLE_SUMMARY} />
-          <UnpricedModelsWarning models={SAMPLE_SUMMARY.unpricedModels} month={SAMPLE_SUMMARY.month} />
+          <DataQualityStrip
+            untimestampedRequests={SAMPLE_SUMMARY.untimestampedRequests}
+            unpricedModels={SAMPLE_SUMMARY.unpricedModels}
+            month={SAMPLE_SUMMARY.month}
+          />
           <CostChart customers={SAMPLE_CUSTOMERS} highlightColor={highlightColor} />
 
-        <div className="surface-card overflow-hidden rounded-xl border border-zinc-200/90 bg-white dark:border-zinc-800/80 dark:bg-[#121316]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Customer breakdown</h3>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Sample month: October 2026</p>
+          <div className="surface-card overflow-hidden rounded-xl border border-zinc-200/90 bg-white dark:border-zinc-800/80 dark:bg-[#121316]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Customer breakdown</h3>
+                <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">Sample month: October 2026</p>
+              </div>
+              <span className="rounded-md border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">CSV export available</span>
             </div>
-            <span className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">CSV export available</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-xs">
-              <thead className="bg-zinc-50 text-[10px] uppercase tracking-wider text-zinc-500 dark:bg-zinc-900/70 dark:text-zinc-400">
-                <tr>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Customer</th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Requests</th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Spend share</th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Revenue</th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Margin</th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Cost</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {SAMPLE_CUSTOMERS.map(customer => (
-                  <tr key={customer.customerId} className="text-zinc-700 dark:text-zinc-300">
-                    <th scope="row" className="px-4 py-3 font-mono font-medium text-zinc-900 dark:text-zinc-100">{customer.customerId}</th>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">{customer.totalRequests}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">{customer.percentOfTotal}%</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">${customer.monthlyRevenueUsd}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">${customer.marginUsd}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums">${customer.totalCost}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead className="bg-zinc-50 text-xs uppercase tracking-wider text-zinc-600 dark:bg-zinc-900/70 dark:text-zinc-400 font-semibold">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 font-medium">Customer</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Requests</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Spend share</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Revenue</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Margin</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Cost</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {SAMPLE_CUSTOMERS.map(customer => (
+                    <tr key={customer.customerId} className="text-zinc-700 dark:text-zinc-300">
+                      <th scope="row" className="px-4 py-3 font-mono font-medium text-zinc-900 dark:text-zinc-100">{customer.customerId}</th>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">{customer.totalRequests}</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">{customer.percentOfTotal}%</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">${customer.monthlyRevenueUsd}</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">${customer.marginUsd}</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold text-zinc-950 dark:text-zinc-50">${customer.totalCost}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <ul className="mt-4 flex flex-wrap gap-2" aria-label="Included dashboard features">
-          {CALLOUTS.map(callout => (
-            <li key={callout} className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-              {callout}
-            </li>
-          ))}
-        </ul>
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <ul className="flex flex-wrap gap-2" aria-label="Included dashboard features">
+            {CALLOUTS.map(callout => (
+              <li key={callout} className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                {callout}
+              </li>
+            ))}
+          </ul>
+
+          <button
+            type="button"
+            onClick={onLaunchApp}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-medium text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-zinc-900 transition-colors self-start sm:self-auto shrink-0"
+          >
+            <span>Upload your usage CSV</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
       </div>
-      <div className="mt-5 flex justify-end">
-        <button type="button" onClick={onLaunchApp} className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:text-zinc-300 dark:hover:bg-zinc-900">
-          Upload your usage CSV <span aria-hidden="true">→</span>
-        </button>
-      </div>
-    </div>
-  </section>
+    </section>
   );
 };

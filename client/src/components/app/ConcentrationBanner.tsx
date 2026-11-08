@@ -37,36 +37,26 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
 
   return (
     <div
-      className={`dashboard-enter rounded-xl px-4 py-3 mb-6 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-        isHighConcentration
-          ? 'bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200'
-          : 'bg-zinc-100/80 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
-      }`}
+      className="dashboard-enter rounded-xl px-4 py-3 mb-6 border border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-50/90 dark:bg-[#141518] text-zinc-900 dark:text-zinc-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
       style={{ animationDelay: '55ms' }}
     >
       <div className="flex items-center gap-3">
-        <div
-          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold font-mono ${
-            isHighConcentration
-              ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-              : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-          }`}
-        >
+        <div className="w-6 h-6 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shrink-0 text-xs font-mono font-bold border border-zinc-300/80 dark:border-zinc-700/60">
           {isHighConcentration ? '!' : 'i'}
         </div>
 
         <div>
-          <div className="text-xs font-semibold tracking-tight">
+          <div className="text-xs font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
             {isHighConcentration ? 'Whale Concentration Risk Detected' : 'Unit Economics Distribution'}
           </div>
-          <div className="text-xs opacity-90 mt-0.5">
+          <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 leading-normal">
             {isHighConcentration ? (
               <>
-                Top {top3.length} accounts consume <strong>{formattedShare}</strong> of your total spend in this period. Account <span className="font-mono font-bold">{top3[0]?.customerId}</span> accounts for {formattedTop1Share} of total spend.
+                Top {top3.length} accounts consume <strong className="text-zinc-900 dark:text-zinc-100">{formattedShare}</strong> of your total spend in this period. Account <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{top3[0]?.customerId}</span> accounts for {formattedTop1Share} of total spend.
               </>
             ) : (
               <>
-                Token expenditure is diversified. Top {top3.length} accounts represent <strong>{formattedShare}</strong> of total spend.
+                Token expenditure is diversified. Top {top3.length} accounts represent <strong className="text-zinc-900 dark:text-zinc-100">{formattedShare}</strong> of total spend.
               </>
             )}
           </div>
@@ -74,13 +64,7 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
       </div>
 
       <div className="shrink-0 self-end sm:self-auto">
-        <span
-          className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded border tabular-nums ${
-            isHighConcentration
-              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/40'
-              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/60'
-          }`}
-        >
+        <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-md border tabular-nums bg-white dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700/80 shadow-xs">
           {formattedShare} spend in Top 3
         </span>
       </div>

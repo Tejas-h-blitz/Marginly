@@ -6,13 +6,14 @@ import { LandingPage } from './components/landing/LandingPage.js';
 import { AuthModal } from './components/auth/AuthModal.js';
 import { AppNavbar } from './components/app/AppNavbar.js';
 import { ConcentrationBanner } from './components/app/ConcentrationBanner.js';
-import { UnpricedModelsWarning } from './components/app/UnpricedModelsWarning.js';
+import { DataQualityStrip } from './components/app/DataQualityStrip.js';
 import { ImportDrawer } from './components/app/ImportDrawer.js';
 import { KpiGrid } from './components/KpiGrid.js';
 import { CostChart } from './components/CostChart.js';
 import { CustomerTable } from './components/CustomerTable.js';
 import { PricingModal } from './components/PricingModal.js';
 import { InlineSpinner } from './components/InlineSpinner.js';
+import { formatFixedUsd, formatPercent } from './money.js';
 import {
   CustomerBreakdown,
   UsageSummary,
@@ -211,7 +212,7 @@ function MainAppContent() {
     }
   };
 
-  const handleRevenueImport = async (file: File) => {
+  const handleRevenueImport = async (file: File): Promise<boolean> => {
     setLoading(true);
     try {
       const authHeaders = await getAuthHeaders();
@@ -227,8 +228,10 @@ function MainAppContent() {
       if (!res.ok) throw new Error(data.error || 'Failed to import revenue CSV.');
       showAlert(data.message, 'success');
       await loadData();
+      return true;
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to import revenue CSV.', 'error');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -257,7 +260,7 @@ function MainAppContent() {
     }
   };
 
-  const handleUploadFile = async (file: File) => {
+  const handleUploadFile = async (file: File): Promise<boolean> => {
     setLoading(true);
     showAlert(`Uploading '${file.name}'...`, 'info');
     const formData = new FormData();
@@ -281,14 +284,16 @@ function MainAppContent() {
         : '';
       showAlert(`${data.message}${pricingWarning}`, 'success');
       await loadData();
+      return true;
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to upload file', 'error');
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePasteSubmit = async (content: string, format: 'csv' | 'json') => {
+  const handlePasteSubmit = async (content: string, format: 'csv' | 'json'): Promise<boolean> => {
     setLoading(true);
     showAlert('Processing pasted data...', 'info');
 
@@ -313,12 +318,34 @@ function MainAppContent() {
         : '';
       showAlert(`${data.message}${pricingWarning}`, 'success');
       await loadData();
+      return true;
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to process pasted data', 'error');
+      return false;
     } finally {
       setLoading(false);
     }
   };
+
+  const insightLine = (() => {
+    if (!customers || customers.length === 0 || Number(summary.totalCost) <= 0) return null;
+    const topCustomer = customers[0];
+    if (!topCustomer || Number(topCustomer.totalCost) <= 0) return null;
+
+    const topShare = formatPercent(topCustomer.percentOfTotal, 1);
+    let line = `Top spender: ${topCustomer.customerId} accounts for ${topShare} of total spend ($${formatFixedUsd(topCustomer.totalCost, 4)}).`;
+
+    const hasRevenue = customers.some(c => c.monthlyRevenueUsd !== null);
+    if (hasRevenue) {
+      const unprofitableCount = summary.unprofitableCustomers;
+      if (unprofitableCount > 0) {
+        line += ` ${unprofitableCount} ${unprofitableCount === 1 ? 'customer is' : 'customers are'} unprofitable.`;
+      } else {
+        line += ` All accounts with revenue are profitable.`;
+      }
+    }
+    return line;
+  })();
 
   return (
     <>
@@ -347,13 +374,18 @@ function MainAppContent() {
                 <h1 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                   Customer Cost &amp; Unit Economics
                 </h1>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                   Per-account LLM expenditure audit, power user detection, and margin protection.
                 </p>
+                {insightLine && (
+                  <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mt-1">
+                    {insightLine}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto justify-end">
-                <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                   <span>Period</span>
                   <select
                     value={selectedMonth ?? summary.month}
@@ -403,16 +435,17 @@ function MainAppContent() {
             </div>
 
             {summary.month === 'all' && (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 -mt-2">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 -mt-2">
                 All-time view shows costs only. Select a month to compare revenue and margin.
               </p>
             )}
 
-            {summary.untimestampedRequests > 0 && (
-              <div className="dashboard-enter rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300" style={{ animationDelay: '45ms' }}>
-                {summary.untimestampedRequests.toLocaleString()} records have missing or invalid timestamps and are included only in All time.
-              </div>
-            )}
+            {/* Data Quality Strip (consolidates untimestamped records and unpriced models) */}
+            <DataQualityStrip
+              untimestampedRequests={summary.untimestampedRequests}
+              unpricedModels={summary.unpricedModels}
+              month={summary.month}
+            />
 
             {/* Pareto 80/20 Concentration Risk Alert */}
             <ConcentrationBanner
@@ -420,10 +453,8 @@ function MainAppContent() {
               totalCost={summary.totalCost}
             />
 
-            <UnpricedModelsWarning models={summary.unpricedModels} month={summary.month} />
-
             {/* KPI Cards */}
-            <KpiGrid summary={summary} />
+            <KpiGrid summary={summary} loading={loading} />
 
             {/* Recharts Customer Spend Distribution */}
             <CostChart customers={customers} />
