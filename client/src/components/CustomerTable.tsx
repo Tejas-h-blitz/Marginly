@@ -57,6 +57,9 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
     }
   };
 
+  const whalesCount = customers.filter(c => compareMoney(c.percentOfTotal, '10') >= 0).length;
+  const lowCount = customers.filter(c => compareMoney(c.percentOfTotal, '5') < 0).length;
+
   // 1. Filter
   let filtered = customers.filter(c =>
     c.customerId.toLowerCase().includes(searchTerm.toLowerCase())
@@ -121,7 +124,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              Whales (≥10%)
+              Whales (≥10%) ({whalesCount})
             </button>
             <button
               onClick={() => setFilterTier('low')}
@@ -131,7 +134,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({ customers, month, 
                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              Low (&lt;5%)
+              Low (&lt;5%) ({lowCount})
             </button>
           </div>
 

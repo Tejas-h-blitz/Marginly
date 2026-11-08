@@ -40,11 +40,19 @@ export function parseMonthlyRevenue(value: unknown): Money {
 
 export function monthDateRange(month: string): { gte: Date; lt: Date } {
   const [yearText, monthText] = month.split('-');
-  const year = Number(yearText);
-  const monthNumber = Number(monthText);
+  const year = parseInt(yearText, 10);
+  const monthNumber = parseInt(monthText, 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  const nextYear = monthNumber === 12 ? year + 1 : year;
+  const nextMonth = monthNumber === 12 ? 1 : monthNumber + 1;
+
+  const gteIso = `${year}-${pad(monthNumber)}-01T00:00:00.000Z`;
+  const ltIso = `${nextYear}-${pad(nextMonth)}-01T00:00:00.000Z`;
+
   return {
-    gte: new Date(Date.UTC(year, monthNumber - 1, 1)),
-    lt: new Date(Date.UTC(year, monthNumber, 1))
+    gte: new Date(gteIso),
+    lt: new Date(ltIso)
   };
 }
 

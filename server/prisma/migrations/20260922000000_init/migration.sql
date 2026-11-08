@@ -12,7 +12,7 @@ CREATE TABLE "customers" (
 CREATE TABLE "usage_records" (
     "id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
-    "timestamp" TIMESTAMP(3),
+    "timestamp" TIMESTAMPTZ(3),
     "model_name" TEXT NOT NULL,
     "input_tokens" INTEGER NOT NULL,
     "output_tokens" INTEGER NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE "usage_records" (
     "input_cost" DOUBLE PRECISION NOT NULL,
     "output_cost" DOUBLE PRECISION NOT NULL,
     "total_cost" DOUBLE PRECISION NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "usage_records_pkey" PRIMARY KEY ("id")
 );

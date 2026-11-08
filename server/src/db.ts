@@ -23,14 +23,16 @@ export interface IDatabase {
     deleteMany(args?: { where?: { userId?: string } }): Promise<unknown>;
   };
   usageRecord: {
-    createMany(args: { data: Array<{
-      userId: string;
-      customerId: string;
-      timestamp: Date | null;
-      modelName: string;
-      inputTokens: number;
-      outputTokens: number;
-    }> }): Promise<{ count: number }>;
+    createMany(args: {
+      data: Array<{
+        userId: string;
+        customerId: string;
+        timestamp: Date | null;
+        modelName: string;
+        inputTokens: number;
+        outputTokens: number;
+      }>
+    }): Promise<{ count: number }>;
     findMany(args?: {
       where?: {
         userId?: string;
@@ -108,7 +110,30 @@ async function getPglite(): Promise<PGlite> {
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
-    pgliteInstance = new PGlite(dbDir);
+
+    // Clean up stale lockfile if left behind by abnormal termination
+    const lockFile = path.join(dbDir, 'postmaster.pid');
+    if (fs.existsSync(lockFile)) {
+      try {
+        fs.unlinkSync(lockFile);
+      } catch { }
+    }
+
+    try {
+      pgliteInstance = new PGlite(dbDir);
+      await pgliteInstance.exec('SELECT 1');
+    } catch (err) {
+      console.warn('[Database] Embedded PostgreSQL encountered a corrupted state. Resetting dev data directory and recovering...');
+      try {
+        if (pgliteInstance) {
+          await pgliteInstance.close().catch(() => { });
+        }
+      } catch { }
+      pgliteInstance = null;
+      fs.rmSync(dbDir, { recursive: true, force: true });
+      fs.mkdirSync(dbDir, { recursive: true });
+      pgliteInstance = new PGlite(dbDir);
+    }
 
     // Apply init migration SQL
     const initMigrationPath = path.resolve(__dirname, '../prisma/migrations/20260922000000_init/migration.sql');
@@ -133,10 +158,26 @@ async function getPglite(): Promise<PGlite> {
     }
 
     const recalculationMigration = path.resolve(__dirname, '../prisma/migrations/20261103000000_recalculate_costs_from_tokens/migration.sql');
-    await pgliteInstance.exec(fs.readFileSync(recalculationMigration, 'utf-8'));
+    if (fs.existsSync(recalculationMigration)) {
+      try {
+        await pgliteInstance.exec(fs.readFileSync(recalculationMigration, 'utf-8'));
+      } catch { }
+    }
 
     const monthlyRevenueMigration = path.resolve(__dirname, '../prisma/migrations/20261104000000_monthly_revenue/migration.sql');
-    await pgliteInstance.exec(fs.readFileSync(monthlyRevenueMigration, 'utf-8'));
+    if (fs.existsSync(monthlyRevenueMigration)) {
+      try {
+        await pgliteInstance.exec(fs.readFileSync(monthlyRevenueMigration, 'utf-8'));
+      } catch { }
+    }
+
+    // Ensure timestamp columns use TIMESTAMPTZ(3) in UTC
+    try {
+      await pgliteInstance.exec(`
+        ALTER TABLE usage_records ALTER COLUMN timestamp TYPE TIMESTAMPTZ(3) USING timestamp AT TIME ZONE 'UTC';
+        ALTER TABLE usage_records ALTER COLUMN created_at TYPE TIMESTAMPTZ(3) USING created_at AT TIME ZONE 'UTC';
+      `);
+    } catch { }
   }
   return pgliteInstance;
 }
@@ -187,6 +228,25 @@ export async function checkConnection(): Promise<boolean> {
     await getPglite();
     return false;
   }
+}
+
+export function parseDbTimestamp(val: unknown): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val;
+  }
+  let s = String(val).trim();
+  if (!s) return null;
+  s = s.replace(' ', 'T');
+  if (!s.endsWith('Z') && !/[+-]\d{2}(?::?\d{2})?$/.test(s)) {
+    s += 'Z';
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function toUtcDate(val: unknown): Date | null {
+  return parseDbTimestamp(val);
 }
 
 // Unified Database Accessor
@@ -311,7 +371,7 @@ export const db: IDatabase = {
           model_name: string;
           input_tokens: number;
           output_tokens: number;
-          timestamp: Date | null;
+          timestamp: Date | string | null;
         }>(
           'SELECT customer_id, model_name, input_tokens, output_tokens, timestamp FROM usage_records WHERE user_id = $1 AND timestamp >= $2 AND timestamp < $3;',
           [userId, timestampRange.gte.toISOString(), timestampRange.lt.toISOString()]
@@ -322,7 +382,7 @@ export const db: IDatabase = {
           model_name: string;
           input_tokens: number;
           output_tokens: number;
-          timestamp: Date | null;
+          timestamp: Date | string | null;
         }>('SELECT customer_id, model_name, input_tokens, output_tokens, timestamp FROM usage_records WHERE user_id = $1;', [userId]);
       } else {
         res = await pg.query<{
@@ -330,7 +390,7 @@ export const db: IDatabase = {
           model_name: string;
           input_tokens: number;
           output_tokens: number;
-          timestamp: Date | null;
+          timestamp: Date | string | null;
         }>('SELECT customer_id, model_name, input_tokens, output_tokens, timestamp FROM usage_records;');
       }
 
@@ -339,7 +399,7 @@ export const db: IDatabase = {
         modelName: r.model_name,
         inputTokens: Number(r.input_tokens),
         outputTokens: Number(r.output_tokens),
-        timestamp: r.timestamp ? new Date(r.timestamp) : null
+        timestamp: parseDbTimestamp(r.timestamp)
       }));
     },
 

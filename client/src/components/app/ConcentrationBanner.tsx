@@ -62,7 +62,7 @@ export const ConcentrationBanner: React.FC<ConcentrationBannerProps> = ({ custom
           <div className="text-xs opacity-90 mt-0.5">
             {isHighConcentration ? (
               <>
-                Top {top3.length} accounts consume <strong>{formattedShare}</strong> of your total token bill. Account <span className="font-mono font-bold">{top3[0]?.customerId}</span> accounts for {formattedTop1Share} of total spend.
+                Top {top3.length} accounts consume <strong>{formattedShare}</strong> of your total spend in this period. Account <span className="font-mono font-bold">{top3[0]?.customerId}</span> accounts for {formattedTop1Share} of total spend.
               </>
             ) : (
               <>

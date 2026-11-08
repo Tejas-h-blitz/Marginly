@@ -5,6 +5,32 @@ import { getActivePricing, normalizeModelName } from './pricingService.js';
 import { RawUsageInput, CalculatedRecord, CustomerBreakdown, UsageSummary } from '../types/index.js';
 import { calculateTokenCost, monthDateRange, Money, toMoneyString, zeroMoney } from './money.js';
 
+export function parseUtcTimestamp(raw: unknown): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+  let text = String(raw).trim();
+  if (!text) return null;
+  if (/^\d{10,13}$/.test(text)) {
+    const num = parseInt(text, 10);
+    const ms = text.length === 10 ? num * 1000 : num;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(text)) {
+    text = text.replace(/\s+/, 'T');
+  }
+  const hasTimezone = /[zZ]$|[+-]\d{2}(?::?\d{2})?$/.test(text);
+  if (!hasTimezone && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(text)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      text = text + 'T00:00:00.000Z';
+    } else {
+      text = text + 'Z';
+    }
+  }
+  const d = new Date(text);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function extractField(row: Record<string, unknown>, candidateKeys: string[]): unknown {
   const normalizedRow: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
@@ -31,13 +57,7 @@ export async function processRawRecords(rawRows: RawUsageInput[]): Promise<Calcu
     const customerId = String(customerIdRaw).trim();
 
     const timestampRaw = extractField(r as Record<string, unknown>, ['timestamp', 'time', 'date', 'created_at']);
-    let timestamp: Date | null = null;
-    if (timestampRaw) {
-      const d = new Date(String(timestampRaw).trim());
-      if (!isNaN(d.getTime())) {
-        timestamp = d;
-      }
-    }
+    const timestamp = parseUtcTimestamp(timestampRaw);
 
     const modelRaw = extractField(r as Record<string, unknown>, ['model_name', 'modelName', 'model']);
     const modelName = modelRaw ? String(modelRaw).trim() : '(missing model name)';
@@ -165,8 +185,11 @@ async function getDashboardData(userId: string, requestedMonth?: string): Promis
   const dateRange = month === 'all' ? null : monthDateRange(month);
   const periodRecords = month === 'all'
     ? allRecords
-    : allRecords.filter(record => record.timestamp && dateRange &&
-      record.timestamp >= dateRange.gte && record.timestamp < dateRange.lt);
+    : allRecords.filter(record => {
+        if (!record.timestamp || !dateRange) return false;
+        const time = record.timestamp.getTime();
+        return time >= dateRange.gte.getTime() && time < dateRange.lt.getTime();
+      });
   const pricingKeys = Object.keys(pricing);
   const totalsByCustomer = new Map<string, CustomerTotals>();
   const unpricedModelCounts = new Map<string, number>();
@@ -242,33 +265,38 @@ async function getDashboardData(userId: string, requestedMonth?: string): Promis
     return bCost.comparedTo(aCost);
   });
 
+  const activeBreakdown = month === 'all'
+    ? customerBreakdown
+    : customerBreakdown.filter(customer => customer.totalRequests > 0);
+
   const totalRevenue = month === 'all'
     ? null
-    : storedCustomers.reduce(
+    : activeBreakdown.reduce(
       (sum, customer) => customer.monthlyRevenueUsd === null
         ? sum
         : sum.plus(customer.monthlyRevenueUsd),
       zeroMoney()
     );
-  const totalMargin = totalRevenue === null
+  const hasMargin = activeBreakdown.some(customer => customer.marginUsd !== null);
+  const totalMargin = totalRevenue === null || !hasMargin
     ? null
-    : customerBreakdown.reduce(
+    : activeBreakdown.reduce(
       (sum, customer) => customer.marginUsd === null ? sum : sum.plus(customer.marginUsd),
       zeroMoney()
     );
   const totalRequests = periodRecords.length;
   const unprofitableCustomers = month === 'all'
     ? 0
-    : customerBreakdown.filter(customer => customer.unprofitable).length;
-  const topCustomer = customerBreakdown.find(customer => customer.totalRequests > 0);
+    : activeBreakdown.filter(customer => customer.unprofitable).length;
+  const topCustomer = activeBreakdown.find(customer => customer.totalRequests > 0);
 
   return {
-    customers: customerBreakdown,
+    customers: activeBreakdown,
     summary: {
       month,
       availableMonths,
       untimestampedRequests: allRecords.filter(record => record.timestamp === null).length,
-      totalCustomers: storedCustomers.length,
+      totalCustomers: activeBreakdown.length,
       totalRequests,
       pricedRequests,
       totalInputTokens: periodRecords.reduce((sum, record) => sum + record.inputTokens, 0),
