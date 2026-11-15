@@ -12,7 +12,9 @@ import {
   getCustomerDetail,
   mergeCustomerInto,
   getImportHistory,
+  undoImportBatch,
   importUsageRecords,
+  UsageImportResponse,
   UsageImportValidationError,
   clearAllData,
   importCustomerRevenue,
@@ -57,6 +59,30 @@ const handleFileUpload = (req: Request, res: Response, next: (error?: unknown) =
 
 function getRequestedMonth(req: Request): string | undefined {
   return validateMonth(req.query.month);
+}
+
+function getDuplicateMode(value: unknown): 'detect' | 'skip' | 'allow' | null {
+  if (value === undefined) return 'detect';
+  return value === 'detect' || value === 'skip' || value === 'allow' ? value : null;
+}
+
+function sendUsageImportResponse(
+  res: Response,
+  result: UsageImportResponse,
+  successMessage: string
+): void {
+  if ('requiresDecision' in result) {
+    res.status(409).json(result);
+    return;
+  }
+  const sampleNotice = result.sampleDataRemoved
+    ? ' Previous sample data and its customers were removed.'
+    : '';
+  res.json({
+    success: true,
+    message: `${successMessage}${sampleNotice}`,
+    ...result
+  });
 }
 
 export function verifyTestAuthToken(token: string, secret: string): string | null {
@@ -324,6 +350,25 @@ apiRouter.get('/import-history', async (_req: Request, res: Response): Promise<v
   }
 });
 
+apiRouter.post('/import-history/:batchId/undo', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await undoImportBatch(res.locals.userId, req.params.batchId);
+    if (!result) {
+      res.status(404).json({ error: 'Import batch not found for this account.' });
+      return;
+    }
+    res.json({
+      success: true,
+      sourceName: result.sourceName,
+      removedRecords: result.removedRecords,
+      message: `Undid import '${result.sourceName}' and removed ${result.removedRecords} records.`
+    });
+  } catch (err) {
+    console.error('Error undoing import batch:', err);
+    res.status(500).json({ error: 'Failed to undo import.' });
+  }
+});
+
 apiRouter.post('/custom-rates', async (req: Request, res: Response): Promise<void> => {
   try {
     const rate = await createCustomRate(res.locals.userId, req.body ?? {});
@@ -396,6 +441,11 @@ apiRouter.post('/upload', handleFileUpload, async (req: Request, res: Response):
       res.status(400).json({ error: 'Only CSV and JSON files are supported.' });
       return;
     }
+    const duplicateMode = getDuplicateMode(req.body?.duplicate_mode);
+    if (!duplicateMode) {
+      res.status(400).json({ error: 'duplicate_mode must be detect, skip, or allow.' });
+      return;
+    }
     const content = req.file.buffer.toString('utf-8');
 
     let rawRows;
@@ -414,14 +464,18 @@ apiRouter.post('/upload', handleFileUpload, async (req: Request, res: Response):
 
     const result = await importUsageRecords(rawRows, res.locals.userId, {
       sourceName: path.basename(req.file.originalname),
-      sourceType: 'upload'
+      sourceType: 'upload',
+      duplicateMode
     });
-
-    res.json({
-      success: true,
-      message: `Imported ${result.insertedRecords} new records from '${path.basename(req.file.originalname)}'; skipped ${result.duplicateRecords} duplicates. ${result.unpricedRecords} new records were unpriced.`,
-      ...result
-    });
+    sendUsageImportResponse(
+      res,
+      result,
+      'Import completed. ' + (
+        'requiresDecision' in result
+          ? ''
+          : `Added ${result.insertedRecords} records from '${path.basename(req.file.originalname)}'; ${result.duplicateMode === 'allow' ? `allowed ${result.duplicateRecords} duplicate rows` : `skipped ${result.duplicateRecords} duplicates`}. ${result.unpricedRecords} new records were unpriced.`
+      )
+    );
   } catch (err) {
     if (err instanceof UsageImportValidationError) {
       res.status(400).json({ error: err.message, rejectedRows: err.rejectedRows });
@@ -444,6 +498,11 @@ apiRouter.post('/paste', async (req: Request<{}, {}, PastePayload>, res: Respons
       res.status(413).json({ error: 'Pasted usage data must be 10 MB or smaller.' });
       return;
     }
+    const duplicateMode = getDuplicateMode(req.body?.duplicate_mode);
+    if (!duplicateMode) {
+      res.status(400).json({ error: 'duplicate_mode must be detect, skip, or allow.' });
+      return;
+    }
 
     const trimmed = content.trim();
     let rawRows;
@@ -463,14 +522,18 @@ apiRouter.post('/paste', async (req: Request<{}, {}, PastePayload>, res: Respons
 
     const result = await importUsageRecords(rawRows, res.locals.userId, {
       sourceName: 'Pasted usage data',
-      sourceType: 'paste'
+      sourceType: 'paste',
+      duplicateMode
     });
-
-    res.json({
-      success: true,
-      message: `Imported ${result.insertedRecords} new records; skipped ${result.duplicateRecords} duplicates. ${result.unpricedRecords} new records were unpriced.`,
-      ...result
-    });
+    sendUsageImportResponse(
+      res,
+      result,
+      'Import completed. ' + (
+        'requiresDecision' in result
+          ? ''
+          : `Added ${result.insertedRecords} records; ${result.duplicateMode === 'allow' ? `allowed ${result.duplicateRecords} duplicate rows` : `skipped ${result.duplicateRecords} duplicates`}. ${result.unpricedRecords} new records were unpriced.`
+      )
+    );
   } catch (err) {
     if (err instanceof UsageImportValidationError) {
       res.status(400).json({ error: err.message, rejectedRows: err.rejectedRows });
@@ -508,8 +571,13 @@ apiRouter.post('/load-sample', async (req: Request, res: Response): Promise<void
     const rawRows = parseCsv(content);
     const result = await importUsageRecords(rawRows, res.locals.userId, {
       sourceName: 'Bundled sample usage',
-      sourceType: 'sample'
+      sourceType: 'sample',
+      duplicateMode: 'skip'
     });
+    if ('requiresDecision' in result) {
+      res.status(500).json({ error: 'Sample import unexpectedly requires a duplicate decision.' });
+      return;
+    }
 
     res.json({
       success: true,

@@ -467,6 +467,22 @@ async function runE2eSuite() {
     const pasteCsvData = await pasteCsvRes.json();
     if (pasteCsvRes.ok) {
       logPass('POST /api/paste ingests raw CSV usage rows', pasteCsvData.message);
+
+      const duplicateAllowRes = await fetch(`${BASE_URL}/api/paste`, {
+        method: 'POST',
+        headers: AUTH_HEADERS,
+        body: JSON.stringify({
+          content: csvContent,
+          format: 'csv',
+          duplicate_mode: 'allow'
+        })
+      });
+      const duplicateAllowData = await duplicateAllowRes.json();
+      if (duplicateAllowRes.ok && duplicateAllowData.insertedRecords === 2) {
+        logPass('POST /api/paste duplicate_mode=allow imports duplicate rows');
+      } else {
+        logFail('POST /api/paste duplicate_mode=allow failed', JSON.stringify(duplicateAllowData));
+      }
     } else {
       logFail('POST /api/paste (CSV) failed', pasteCsvData.error);
     }
@@ -537,6 +553,7 @@ async function runE2eSuite() {
         'customer_id',
         'total_requests',
         'priced_requests',
+        'unpriced_requests',
         'total_input_tokens',
         'total_output_tokens',
         'total_tokens',
@@ -574,100 +591,12 @@ async function runE2eSuite() {
     logFail('Cleanup error', err.message);
   }
 
-  // =========================================================================
-  // PHASE 4: UI Modernization Verification Matrix
-  // =========================================================================
-  printSection('Phase 4: UI Modernization & Visual Quality Verification Matrix');
-
-  const uiAudits = [
-    {
-      category: 'Public Landing Page',
-      item: 'Symmetrical 6-Card Feature Grid',
-      spec: 'WhatYouGet.tsx renders exactly 6 cards (3x2 on desktop, 2x3 on tablet) with zero trailing gaps.',
-      verified: true
-    },
-    {
-      category: 'Public Landing Page',
-      item: 'Product Showcase Chart Bar Neutralization',
-      spec: 'acct_acme highlighted bar in ProductShowcase.tsx converted from blue (#1e40af) to white (#ffffff in dark mode).',
-      verified: true
-    },
-    {
-      category: 'Public Landing Page',
-      item: 'Modernized Footer Layout',
-      spec: 'Removed 3 old navigation links; positioned © 2026 Marginly cleanly on the right side.',
-      verified: true
-    },
-    {
-      category: 'Import Drawer',
-      item: 'High-Contrast White Privacy Callout',
-      spec: 'Notice "Use anonymized customer IDs..." converted to pure white text on dark elevated surface.',
-      verified: true
-    },
-    {
-      category: 'Import Drawer',
-      item: 'Header Badge Removal',
-      spec: 'Removed "DATA INGESTION" micro-pill badge from drawer header as requested.',
-      verified: true
-    },
-    {
-      category: 'Import Drawer',
-      item: 'Enhanced Line Spacing & Dropzone',
-      spec: 'Applied leading-relaxed line height, segmented mode pills, and monospaced schema chips.',
-      verified: true
-    },
-    {
-      category: 'Dashboard',
-      item: 'Unpriced Models Warning Neutral Theme',
-      spec: 'Completely removed blue styling; uses dark surface (#141518) and neutral border (#zinc-800).',
-      verified: true
-    },
-    {
-      category: 'Dashboard',
-      item: 'Customer Economics Table Polishing',
-      spec: 'Added customer monogram avatar chips, rank badges, spend share progress bars, and inline revenue edit.',
-      verified: true
-    },
-    {
-      category: 'Dashboard',
-      item: 'KPI Metric Grid Tone Accents',
-      spec: 'Added SVG icons to all metric cards with positive (emerald) / negative (amber) tone badges.',
-      verified: true
-    },
-    {
-      category: 'Dashboard',
-      item: 'Cost Distribution Chart',
-      spec: 'Rounded horizontal bar ends (radius=[0,6,6,0]), hover opacity transitions, and account count badge.',
-      verified: true
-    },
-    {
-      category: 'Authentication',
-      item: 'Clerk React Session Token Forwarding',
-      spec: 'AuthContext integrates useAuth().getToken(); fetch includes Authorization: Bearer <token> & credentials: include.',
-      verified: true
-    }
-  ];
-
-  console.log(`${GRAY}Visual & UX enhancements verified against specifications:${RESET}\n`);
-  for (const audit of uiAudits) {
-    console.log(`  ${GREEN}✓${RESET} ${BOLD}[${audit.category}]${RESET} ${audit.item}`);
-    console.log(`    ${GRAY}${audit.spec}${RESET}`);
-  }
-
   printSummary(startTime);
 }
 
 function printSummary(startTime) {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`\n${BOLD}====================================================${RESET}`);
-  if (failed === 0) {
-    console.log(`${GREEN}${BOLD}ALL TESTS PASSED!${RESET} (${passed} checks passed in ${elapsed}s)`);
-    console.log(`${GREEN}The application is fully verified end-to-end and ready for production.${RESET}`);
-  } else {
-    console.log(`${RED}${BOLD}TEST SUITE COMPLETED WITH FAILURES${RESET}`);
-    console.log(`${GREEN}${passed} passed${RESET}, ${RED}${failed} failed${RESET} in ${elapsed}s`);
-  }
-  console.log(`${BOLD}====================================================${RESET}\n`);
+  console.log(`\nPASS: ${passed} | FAIL: ${failed} | ${elapsed}s`);
 }
 
 runE2eSuite().catch(err => {

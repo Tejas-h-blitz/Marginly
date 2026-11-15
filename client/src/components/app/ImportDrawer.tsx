@@ -9,6 +9,7 @@ interface ImportDrawerProps {
   onPasteSubmit: (content: string, format: 'csv' | 'json') => Promise<boolean>;
   onLoadSample: () => void;
   onImportRevenue: (file: File) => Promise<boolean>;
+  onUndoImport: (batchId: string) => Promise<void>;
   loading: boolean;
   importHistory: ImportHistoryItem[];
 }
@@ -20,6 +21,7 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
   onPasteSubmit,
   onLoadSample,
   onImportRevenue,
+  onUndoImport,
   loading,
   importHistory
 }) => {
@@ -169,6 +171,14 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
                     <div className="shrink-0 text-right text-[10px] text-zinc-500 dark:text-zinc-400">
                       <p>{batch.insertedRecords} added · {batch.duplicateRecords} duplicates</p>
                       <p>{batch.unpricedRecords} unpriced of {batch.totalRecords}</p>
+                      <button
+                        type="button"
+                        onClick={() => void onUndoImport(batch.id)}
+                        disabled={loading}
+                        className="mt-1 text-[10px] font-medium text-rose-700 hover:text-rose-900 disabled:opacity-50 dark:text-rose-400 dark:hover:text-rose-300"
+                      >
+                        Undo import
+                      </button>
                     </div>
                   </li>
                 ))}

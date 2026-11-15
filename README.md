@@ -1,6 +1,6 @@
 # Marginly
 
-A minimal, high-utility web application designed for AI SaaS founders to track per-customer LLM API costs (OpenAI & Anthropic), identify high-expenditure accounts eating into gross margins, and export cost breakdown reports.
+A high-utility web application for AI SaaS teams to track per-customer LLM token costs across supported providers, compare costs with monthly revenue, and export customer-level margin reports.
 
 ---
 
@@ -30,9 +30,15 @@ PORT=3001
 
 # Frontend URL
 CLIENT_URL="http://localhost:5173"
+
+# Clerk authentication
+VITE_CLERK_PUBLISHABLE_KEY=""
+CLERK_SECRET_KEY=""
 ```
 
 > **Zero-Setup Local Dev**: If you don't have a local PostgreSQL daemon or Docker running on port 5432 yet, the backend automatically runs with an embedded local PostgreSQL engine (`PGlite`) using the exact same PostgreSQL schema and migrations so you can test end-to-end immediately without friction.
+
+The backend also reads `CLERK_PUBLISHABLE_KEY` as an alias for the frontend publishable key. `NODE_ENV=test` plus an explicit `TEST_AUTH_SECRET` enables signed test tokens only for automated tests; production refuses to start with that secret configured. Database test scripts require `MARGINLY_TEST_PGLITE_DIR` to point to a disposable database copy. There is no demo-user authentication fallback.
 
 ### 2. Run the Application
 
@@ -62,7 +68,7 @@ The production server serves the built React frontend and Express API together o
 The Prisma schema is defined in [`server/prisma/schema.prisma`](server/prisma/schema.prisma) with models:
 - `Customer`: Unique customer account identifiers and timestamps.
 - `UsageRecord`: Individual request logs (`userId`, `customerId`, `timestamp`, `modelName`, `inputTokens`, `outputTokens`). Costs are recalculated from current pricing at query time and are not stored.
-- `ModelPricing`: Configurable per-model pricing rates (`modelName`, `displayName`, `provider`, `costPer1kInput`, `costPer1kOutput`).
+- `ModelPricing`: Shared model display/provider metadata; effective-dated rates are stored in `PriceVersion`.
 
 ### Useful Prisma Commands:
 ```bash
@@ -129,6 +135,7 @@ cust_starter_dev,2026-09-22T10:00:00Z,gpt-4o-mini,3100,520
 The model catalog stores display/provider metadata; effective-dated rates are stored separately in `price_versions`. Global rates and account-specific overrides are resolved at query time from each request's token counts and timestamp.
 - **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4`, `gpt-3.5-turbo`, `o1`, `o1-mini`, `o3-mini`
 - **Anthropic**: `claude-3-7-sonnet`, `claude-3-5-sonnet`, `claude-sonnet-4`, `claude-3-5-haiku`, `claude-3-haiku`, `claude-3-opus`
+- **Google Gemini**: supported catalog models include `gemini-2.5-flash`, `gemini-3.6-flash`, and `gemini-3.8-flash`.
 - Click **"Pricing Rates"** in the navbar to view active rates.
 - Account-specific model rates can be added, edited, and removed in the pricing dialog; the form accepts USD per million tokens and an optional effective date.
 
@@ -137,10 +144,30 @@ Usage records with models that do not match an active pricing entry are marked u
 ## Revenue, customer detail, and imports
 
 - Revenue values are versioned by effective month. Editing a selected month affects that month and later months until a subsequent version is entered; earlier months remain unchanged.
-- Import batches record source, counts, duplicates, unpriced records, and time. Re-imports are user-scoped and idempotent.
+- Import batches record source, counts, duplicate mode, unpriced records, and time. A default import that finds timestamped duplicates returns `409 DUPLICATES` without writing rows; the user can retry with `duplicate_mode=skip` or `duplicate_mode=allow`. Skip inserts only non-duplicates; allow inserts every row. Duplicate checks do not flag rows without timestamps.
+- Each import reports its unpriced-record count. The dashboard lists unrecognized model names and request counts, and unpriced costs are excluded from cost totals and margins.
+- Import history is account-scoped and an individual batch can be undone through `POST /api/import-history/:batchId/undo`. A successful real import removes that account's sample records and sample-only customers.
 - Customer details show model/request totals, recent usage, and revenue history. Merging customers is transactional: usage duplicates collapse, and the target customer's revenue wins same-month conflicts.
-- CSV/JSON usage files and pasted content are limited to 10 MiB and processed in memory. Marginly persists supported customer/model/token/timestamp fields, revenue versions, import metadata, and custom rates—not prompt or completion text. Do not include prompt contents or secrets in imports.
+- CSV/JSON usage files and pasted content are limited to 10 MiB and processed in memory. Imports write in 1,000-row chunks inside a transaction. Marginly persists supported customer/model/token/timestamp fields, revenue versions, import metadata, and custom rates—not prompt or completion text. Do not include prompt contents or secrets in imports.
 - The dashboard clear action permanently removes the signed-in account's usage records, customer/revenue history, import history, and custom rates from the active database. It does not delete the Clerk account or guarantee removal of operational logs or backups.
+
+## Known limitations
+
+- Revenue totals include active customers only.
+- Rows without timestamps are excluded from duplicate checks.
+- Customer merges cannot be undone.
+- Costs use current effective list prices for text-token counts; they do not represent provider invoices, negotiated discounts, or non-text billing.
+
+## Measured 50,000-row benchmark
+
+Run `npm run test:performance` with an isolated PGlite test database. On Windows with Node v22.17.1, embedded PGlite, a 12th Gen Intel Core i5-1235U (10 cores / 12 logical processors), and 7.68 GiB RAM, two measured runs returned:
+
+| Run | 50,000-row import | `/api/summary` | `/api/customers` |
+|---|---:|---:|---:|
+| 1 | 6,651.95 ms | 1,340.28 ms | 1,284.00 ms |
+| 2 | 14,447.54 ms | 990.29 ms | 3,498.26 ms |
+
+These are local measurements, not service-level guarantees; the variation is material. A matching pre-Phase-F run did not complete after 11 minutes and was stopped, so there is no completed before/after comparison.
 
 ## Privacy and Terms drafts
 
@@ -159,6 +186,7 @@ npm run test:imports
 npm run test:revenue
 npm run test:customers
 npm run test:stress
+npm run test:performance
 ```
 
-Database tests require `MARGINLY_TEST_PGLITE_DIR` to point to a disposable, isolated copy. Never point it to production or the active local database. The stress suite runs its 35 checks in UTC, America/Los_Angeles, Asia/Kolkata, and Pacific/Auckland.
+Database tests require `MARGINLY_TEST_PGLITE_DIR` to point to a disposable, isolated copy. Never point it to production or the active local database. The stress suite runs 41 checks in each of UTC, America/Los_Angeles, Asia/Kolkata, and Pacific/Auckland and compares their output for identical results.

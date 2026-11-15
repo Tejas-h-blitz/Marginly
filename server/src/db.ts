@@ -275,9 +275,14 @@ async function getPglite(): Promise<PGlite> {
       await pgliteInstance.exec(fs.readFileSync(priceVersionsMigration, 'utf-8'));
     }
 
-    const importHistoryMigration = path.resolve(__dirname, '../prisma/migrations/20261115000000_usage_import_history/migration.sql');
-    if (fs.existsSync(importHistoryMigration)) {
-      await pgliteInstance.exec(fs.readFileSync(importHistoryMigration, 'utf-8'));
+    const importDuplicateModesMigration = path.resolve(__dirname, '../prisma/migrations/20261117000000_import_duplicate_modes/migration.sql');
+    if (fs.existsSync(importDuplicateModesMigration)) {
+      await pgliteInstance.exec(fs.readFileSync(importDuplicateModesMigration, 'utf-8'));
+    } else {
+      const importHistoryMigration = path.resolve(__dirname, '../prisma/migrations/20261115000000_usage_import_history/migration.sql');
+      if (fs.existsSync(importHistoryMigration)) {
+        await pgliteInstance.exec(fs.readFileSync(importHistoryMigration, 'utf-8'));
+      }
     }
 
     const revenueVersionsMigration = path.resolve(__dirname, '../prisma/migrations/20261116000000_revenue_versions/migration.sql');

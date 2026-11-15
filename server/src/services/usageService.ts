@@ -22,7 +22,9 @@ export interface ImportHistoryItem {
   totalRecords: number;
   insertedRecords: number;
   duplicateRecords: number;
+  withinFileDuplicates: number;
   unpricedRecords: number;
+  duplicateMode: 'skip' | 'allow';
   createdAt: string;
 }
 
@@ -32,7 +34,21 @@ export interface UsageImportResult {
   unpricedRecords: number;
   batch: ImportHistoryItem;
   summary: UsageSummary;
+  sampleDataRemoved: boolean;
+  withinFileDuplicates: number;
+  duplicateMode: 'skip' | 'allow';
 }
+
+export interface DuplicateImportPreview {
+  requiresDecision: true;
+  code: 'DUPLICATES';
+  totalRecords: number;
+  withinFile: number;
+  existing: number;
+  totalDuplicates: number;
+}
+
+export type UsageImportResponse = UsageImportResult | DuplicateImportPreview;
 
 export interface CustomerDetail {
   customerId: string;
@@ -47,8 +63,20 @@ export interface CustomerDetail {
     modelName: string;
     requests: number;
     pricedRequests: number;
+    unpricedRequests: number;
     totalInputTokens: number;
     totalOutputTokens: number;
+    totalTokens: number;
+    totalCost: string;
+  }>;
+  byDay: Array<{
+    date: string | null;
+    requests: number;
+    pricedRequests: number;
+    unpricedRequests: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalTokens: number;
     totalCost: string;
   }>;
   recentUsage: Array<{
@@ -80,8 +108,31 @@ interface ImportHistoryRow {
   totalRecords: number;
   insertedRecords: number;
   duplicateRecords: number;
+  withinFileDuplicates: number;
   unpricedRecords: number;
+  duplicateMode: 'skip' | 'allow';
   createdAt: Date | string;
+}
+
+const IMPORT_CHUNK_SIZE = 1000;
+
+type DuplicateMode = 'detect' | 'skip' | 'allow';
+
+interface SaveImportedRecordsResult {
+  batch: ImportHistoryItem | null;
+  preview?: DuplicateImportPreview;
+  sampleDataRemoved: boolean;
+}
+
+function getRecordFingerprint(record: CalculatedRecord): string | null {
+  if (!record.timestamp) return null;
+  return crypto.createHash('sha256').update(JSON.stringify([
+    record.customerId,
+    record.timestamp.toISOString(),
+    record.modelName,
+    record.inputTokens,
+    record.outputTokens
+  ])).digest('hex');
 }
 
 interface RevenueVersionRow {
@@ -271,18 +322,16 @@ export async function saveRecords(records: CalculatedRecord[], userId: string): 
 export async function saveImportedRecords(
   records: CalculatedRecord[],
   userId: string,
-  source: { sourceName: string; sourceType: 'upload' | 'paste' | 'sample' }
-): Promise<ImportHistoryItem> {
+  source: {
+    sourceName: string;
+    sourceType: 'upload' | 'paste' | 'sample';
+    duplicateMode: DuplicateMode;
+  }
+): Promise<SaveImportedRecordsResult> {
   const batchId = crypto.randomUUID();
   const importRows = records.map((record, ordinal) => ({
     ordinal,
-    fingerprint: crypto.createHash('sha256').update(JSON.stringify([
-      record.customerId,
-      record.timestamp?.toISOString() ?? null,
-      record.modelName,
-      record.inputTokens,
-      record.outputTokens
-    ])).digest('hex'),
+    fingerprint: getRecordFingerprint(record),
     customerId: record.customerId,
     timestamp: record.timestamp?.toISOString() ?? null,
     modelName: record.modelName,
@@ -290,101 +339,140 @@ export async function saveImportedRecords(
     outputTokens: record.outputTokens,
     unpriced: record.unpriced
   }));
+  const firstOrdinalByFingerprint = new Map<string, number>();
+  const withinFileOrdinals = new Set<number>();
+  for (const row of importRows) {
+    if (!row.fingerprint) continue;
+    const firstOrdinal = firstOrdinalByFingerprint.get(row.fingerprint);
+    if (firstOrdinal === undefined) {
+      firstOrdinalByFingerprint.set(row.fingerprint, row.ordinal);
+    } else {
+      withinFileOrdinals.add(row.ordinal);
+    }
+  }
+  const withinFileDuplicates = withinFileOrdinals.size;
   const sourceName = source.sourceName.trim().slice(0, 200) || 'Usage import';
-  const rows = await db.$queryRaw<ImportHistoryRow>(
-    `WITH incoming AS (
-       SELECT *
-       FROM jsonb_to_recordset($1::jsonb) AS row_data(
-         ordinal integer,
-         fingerprint text,
-         "customerId" text,
-         "timestamp" timestamptz,
-         "modelName" text,
-         "inputTokens" integer,
-         "outputTokens" integer,
-         unpriced boolean
-       )
-     ),
-     ranked AS (
-       SELECT incoming.*,
-         ROW_NUMBER() OVER (PARTITION BY fingerprint ORDER BY ordinal) AS duplicate_rank
-       FROM incoming
-     ),
-     candidates AS (
-       SELECT ranked.*
-       FROM ranked
-       WHERE duplicate_rank = 1
-         AND NOT EXISTS (
+  return db.$transaction(async tx => {
+    const existingOrdinals = new Set<number>();
+    const omitSampleRows = source.sourceType !== 'sample'
+      ? `AND NOT EXISTS (
+           SELECT 1
+           FROM import_batches AS sample_batch
+           WHERE sample_batch.id = existing.import_batch_id
+             AND sample_batch.user_id = $2
+             AND sample_batch.source_type = 'sample'
+         )`
+      : '';
+
+    for (let offset = 0; offset < importRows.length; offset += IMPORT_CHUNK_SIZE) {
+      const chunk = importRows.slice(offset, offset + IMPORT_CHUNK_SIZE)
+        .filter(row => row.fingerprint !== null && !withinFileOrdinals.has(row.ordinal));
+      if (chunk.length === 0) continue;
+      const matches = await tx.$queryRaw<{ ordinal: number }>(
+        `WITH incoming AS (
+           SELECT *
+           FROM jsonb_to_recordset($1::jsonb) AS row_data(
+             ordinal integer,
+             fingerprint text,
+             "customerId" text,
+             "timestamp" timestamptz,
+             "modelName" text,
+             "inputTokens" integer,
+             "outputTokens" integer,
+             unpriced boolean
+           )
+         )
+         SELECT incoming.ordinal
+         FROM incoming
+         WHERE EXISTS (
            SELECT 1
            FROM usage_records AS existing
            WHERE existing.user_id = $2
-             AND (
-               existing.record_fingerprint = ranked.fingerprint
-               OR (
-                 existing.customer_id = ranked."customerId"
-                 AND existing.timestamp IS NOT DISTINCT FROM ranked."timestamp"
-                 AND existing.model_name = ranked."modelName"
-                 AND existing.input_tokens = ranked."inputTokens"
-                 AND existing.output_tokens = ranked."outputTokens"
-               )
+             AND existing.customer_id = incoming."customerId"
+             AND existing.timestamp = incoming."timestamp"
+             AND existing.model_name = incoming."modelName"
+             AND existing.input_tokens = incoming."inputTokens"
+             AND existing.output_tokens = incoming."outputTokens"
+             ${omitSampleRows}
+         );`,
+        JSON.stringify(chunk),
+        userId
+      );
+      for (const match of matches) existingOrdinals.add(Number(match.ordinal));
+    }
+
+    const existingDuplicates = existingOrdinals.size;
+    const totalDuplicates = withinFileDuplicates + existingDuplicates;
+    if (source.duplicateMode === 'detect' && totalDuplicates > 0) {
+      return {
+        batch: null,
+        preview: {
+          requiresDecision: true,
+          code: 'DUPLICATES',
+          totalRecords: records.length,
+          withinFile: withinFileDuplicates,
+          existing: existingDuplicates,
+          totalDuplicates
+        },
+        sampleDataRemoved: false
+      };
+    }
+
+    let sampleDataRemoved = false;
+    if (source.sourceType !== 'sample') {
+      const sampleRows = await tx.$queryRaw<{ removedBatches: number }>(
+        `WITH removed_usage AS (
+           DELETE FROM usage_records
+           WHERE user_id = $1
+             AND import_batch_id IN (
+               SELECT id FROM import_batches
+               WHERE user_id = $1 AND source_type = 'sample'
              )
+           RETURNING id
+         ),
+         removed_batches AS (
+           DELETE FROM import_batches
+           WHERE user_id = $1 AND source_type = 'sample'
+           RETURNING id
          )
-     ),
-     upserted_customers AS (
-       INSERT INTO customers (id, user_id, customer_id, updated_at)
-       SELECT gen_random_uuid()::text, $2, candidates."customerId", NOW()
-       FROM candidates
-       GROUP BY candidates."customerId"
-       ON CONFLICT (user_id, customer_id) DO NOTHING
-       RETURNING customer_id
-     ),
-     customer_ids AS (
-       SELECT customer_id FROM upserted_customers
-       UNION
-       SELECT customer.customer_id
-       FROM customers AS customer
-       JOIN candidates ON candidates."customerId" = customer.customer_id
-       WHERE customer.user_id = $2
-     ),
-     inserted_records AS (
-       INSERT INTO usage_records (
-         id, user_id, customer_id, timestamp, model_name,
-         input_tokens, output_tokens, record_fingerprint
+         SELECT COUNT(*)::integer AS "removedBatches" FROM removed_batches;`,
+        userId
+      );
+      sampleDataRemoved = Number(sampleRows[0]?.removedBatches ?? 0) > 0;
+      if (sampleDataRemoved) {
+        await tx.$queryRaw(
+          `DELETE FROM customers AS customer
+           WHERE customer.user_id = $1
+             AND customer.monthly_revenue_usd IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM usage_records
+               WHERE user_id = customer.user_id AND customer_id = customer.customer_id
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM revenue_versions
+               WHERE user_id = customer.user_id AND customer_id = customer.customer_id
+             )
+           RETURNING customer.id;`,
+          userId
+        );
+      }
+    }
+
+    const selectedRows = source.duplicateMode === 'allow'
+      ? importRows
+      : importRows.filter(row =>
+          !withinFileOrdinals.has(row.ordinal) && !existingOrdinals.has(row.ordinal)
+        );
+    const skippedDuplicates = records.length - selectedRows.length;
+    const unpricedRecords = selectedRows.filter(row => row.unpriced).length;
+
+    const batchRows = await tx.$queryRaw<ImportHistoryRow>(
+      `INSERT INTO import_batches (
+         id, user_id, source_name, source_type, total_records,
+         inserted_records, duplicate_records, within_file_duplicates,
+         unpriced_records, duplicate_mode
        )
-       SELECT
-         gen_random_uuid()::text,
-         $2,
-         candidates."customerId",
-         candidates."timestamp",
-         candidates."modelName",
-         candidates."inputTokens",
-         candidates."outputTokens",
-         candidates.fingerprint
-       FROM candidates
-       JOIN customer_ids ON customer_ids.customer_id = candidates."customerId"
-       ON CONFLICT (user_id, record_fingerprint)
-         WHERE record_fingerprint IS NOT NULL
-       DO NOTHING
-       RETURNING record_fingerprint AS fingerprint
-     ),
-     batch AS (
-       INSERT INTO import_batches (
-         id, user_id, source_name, source_type,
-         total_records, inserted_records, duplicate_records, unpriced_records
-       )
-       SELECT
-         $3,
-         $2,
-         $4,
-         $5,
-         (SELECT COUNT(*) FROM incoming)::integer,
-         (SELECT COUNT(*) FROM inserted_records)::integer,
-         ((SELECT COUNT(*) FROM incoming) - (SELECT COUNT(*) FROM inserted_records))::integer,
-         COALESCE((
-           SELECT SUM(CASE WHEN candidates.unpriced THEN 1 ELSE 0 END)
-           FROM inserted_records
-           JOIN candidates USING (fingerprint)
-         ), 0)::integer
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING
          id,
          source_name AS "sourceName",
@@ -392,35 +480,104 @@ export async function saveImportedRecords(
          total_records AS "totalRecords",
          inserted_records AS "insertedRecords",
          duplicate_records AS "duplicateRecords",
+         within_file_duplicates AS "withinFileDuplicates",
          unpriced_records AS "unpricedRecords",
-         created_at AS "createdAt"
-     )
-     SELECT * FROM batch;`,
-    JSON.stringify(importRows),
-    userId,
-    batchId,
-    sourceName,
-    source.sourceType
-  );
-  const row = rows[0];
-  if (!row) {
-    throw new Error('Usage import history could not be recorded.');
-  }
-  return {
-    ...row,
-    totalRecords: Number(row.totalRecords),
-    insertedRecords: Number(row.insertedRecords),
-    duplicateRecords: Number(row.duplicateRecords),
-    unpricedRecords: Number(row.unpricedRecords),
-    createdAt: new Date(row.createdAt).toISOString()
-  };
+         duplicate_mode AS "duplicateMode",
+         created_at AS "createdAt";`,
+      batchId,
+      userId,
+      sourceName,
+      source.sourceType,
+      records.length,
+      selectedRows.length,
+      source.duplicateMode === 'allow' ? totalDuplicates : skippedDuplicates,
+      withinFileDuplicates,
+      unpricedRecords,
+      source.duplicateMode === 'allow' ? 'allow' : 'skip'
+    );
+    const batchRow = batchRows[0];
+    if (!batchRow) throw new Error('Usage import history could not be recorded.');
+
+    for (let offset = 0; offset < selectedRows.length; offset += IMPORT_CHUNK_SIZE) {
+      const chunk = selectedRows.slice(offset, offset + IMPORT_CHUNK_SIZE);
+      const payload = JSON.stringify(chunk);
+      await tx.$queryRaw(
+        `WITH incoming AS (
+           SELECT *
+           FROM jsonb_to_recordset($1::jsonb) AS row_data(
+             ordinal integer,
+             fingerprint text,
+             "customerId" text,
+             "timestamp" timestamptz,
+             "modelName" text,
+             "inputTokens" integer,
+             "outputTokens" integer,
+             unpriced boolean
+           )
+         ),
+         upserted_customers AS (
+           INSERT INTO customers (id, user_id, customer_id, updated_at)
+           SELECT gen_random_uuid()::text, $2, incoming."customerId", NOW()
+           FROM incoming
+           GROUP BY incoming."customerId"
+           ON CONFLICT (user_id, customer_id) DO NOTHING
+           RETURNING customer_id
+         ),
+         customer_ids AS (
+           SELECT customer_id FROM upserted_customers
+           UNION
+           SELECT customer.customer_id
+           FROM customers AS customer
+           JOIN incoming ON incoming."customerId" = customer.customer_id
+           WHERE customer.user_id = $2
+         )
+         INSERT INTO usage_records (
+           id, user_id, customer_id, timestamp, model_name,
+           input_tokens, output_tokens, record_fingerprint, import_batch_id
+         )
+         SELECT
+           gen_random_uuid()::text,
+           $2,
+           incoming."customerId",
+           incoming."timestamp",
+           incoming."modelName",
+           incoming."inputTokens",
+           incoming."outputTokens",
+           incoming.fingerprint,
+           $3
+         FROM incoming
+         JOIN customer_ids ON customer_ids.customer_id = incoming."customerId"
+         RETURNING id;`,
+        payload,
+        userId,
+        batchId
+      );
+    }
+
+    return {
+      batch: {
+        ...batchRow,
+        totalRecords: Number(batchRow.totalRecords),
+        insertedRecords: Number(batchRow.insertedRecords),
+        duplicateRecords: Number(batchRow.duplicateRecords),
+        withinFileDuplicates: Number(batchRow.withinFileDuplicates),
+        unpricedRecords: Number(batchRow.unpricedRecords),
+        createdAt: new Date(batchRow.createdAt).toISOString()
+      },
+      sampleDataRemoved
+    };
+  });
 }
 
 export async function importUsageRecords(
   rawRows: RawUsageInput[],
   userId: string,
-  source: { sourceName: string; sourceType: 'upload' | 'paste' | 'sample' }
-): Promise<UsageImportResult> {
+  source: {
+    sourceName: string;
+    sourceType: 'upload' | 'paste' | 'sample';
+    duplicateMode?: DuplicateMode;
+  }
+): Promise<UsageImportResponse> {
   if (rawRows.length === 0) {
     throw new UsageImportValidationError(['No usage records were found.'], 1);
   }
@@ -435,14 +592,23 @@ export async function importUsageRecords(
     ...record,
     unpriced: costs[index]?.cost == null
   }));
-  const batch = await saveImportedRecords(recordsWithPricing, userId, source);
+  const duplicateMode = source.sourceType === 'sample' ? 'skip' : source.duplicateMode ?? 'detect';
+  const saved = await saveImportedRecords(recordsWithPricing, userId, {
+    ...source,
+    duplicateMode
+  });
+  if (saved.preview) return saved.preview;
+  if (!saved.batch) throw new Error('Usage import did not produce an import batch.');
   const summary = await getOverallSummary(userId);
   return {
-    insertedRecords: batch.insertedRecords,
-    duplicateRecords: batch.duplicateRecords,
-    unpricedRecords: batch.unpricedRecords,
-    batch,
-    summary
+    insertedRecords: saved.batch.insertedRecords,
+    duplicateRecords: saved.batch.duplicateRecords,
+    unpricedRecords: saved.batch.unpricedRecords,
+    batch: saved.batch,
+    summary,
+    sampleDataRemoved: saved.sampleDataRemoved,
+    withinFileDuplicates: saved.batch.withinFileDuplicates,
+    duplicateMode: duplicateMode === 'allow' ? 'allow' : 'skip'
   };
 }
 
@@ -455,7 +621,9 @@ export async function getImportHistory(userId: string): Promise<ImportHistoryIte
        total_records AS "totalRecords",
        inserted_records AS "insertedRecords",
        duplicate_records AS "duplicateRecords",
+       within_file_duplicates AS "withinFileDuplicates",
        unpriced_records AS "unpricedRecords",
+       duplicate_mode AS "duplicateMode",
        created_at AS "createdAt"
      FROM import_batches
      WHERE user_id = $1
@@ -468,9 +636,51 @@ export async function getImportHistory(userId: string): Promise<ImportHistoryIte
     totalRecords: Number(row.totalRecords),
     insertedRecords: Number(row.insertedRecords),
     duplicateRecords: Number(row.duplicateRecords),
+    withinFileDuplicates: Number(row.withinFileDuplicates),
     unpricedRecords: Number(row.unpricedRecords),
     createdAt: new Date(row.createdAt).toISOString()
   }));
+}
+
+export async function undoImportBatch(
+  userId: string,
+  batchId: string
+): Promise<{ sourceName: string; removedRecords: number } | null> {
+  if (!batchId || batchId.length > 200) return null;
+  return db.$transaction(async tx => {
+    const batchRows = await tx.$queryRaw<{ sourceName: string }>(
+      'SELECT source_name AS "sourceName" FROM import_batches WHERE id = $1 AND user_id = $2;',
+      batchId,
+      userId
+    );
+    if (!batchRows[0]) return null;
+    const deleted = await tx.$queryRaw<{ id: string }>(
+      'DELETE FROM usage_records WHERE user_id = $1 AND import_batch_id = $2 RETURNING id;',
+      userId,
+      batchId
+    );
+    await tx.$queryRaw(
+      'DELETE FROM import_batches WHERE id = $1 AND user_id = $2 RETURNING id;',
+      batchId,
+      userId
+    );
+    await tx.$queryRaw(
+      `DELETE FROM customers AS customer
+       WHERE customer.user_id = $1
+         AND customer.monthly_revenue_usd IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM usage_records
+           WHERE user_id = customer.user_id AND customer_id = customer.customer_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM revenue_versions
+           WHERE user_id = customer.user_id AND customer_id = customer.customer_id
+         )
+       RETURNING customer.id;`,
+      userId
+    );
+    return { sourceName: batchRows[0].sourceName, removedRecords: deleted.length };
+  });
 }
 
 export function parseCsv(csvText: string): RawUsageInput[] {
@@ -613,6 +823,7 @@ async function getDashboardData(userId: string, requestedMonth?: string): Promis
       monthlyRevenueUsd,
       totalRequests: totals.totalRequests,
       pricedRequests: totals.pricedRequests,
+      unpricedRequests: totals.totalRequests - totals.pricedRequests,
       totalInputTokens: totals.totalInputTokens,
       totalOutputTokens: totals.totalOutputTokens,
       totalTokens: totals.totalTokens,
@@ -768,6 +979,14 @@ export async function getCustomerDetail(
     totalOutputTokens: number;
     totalCost: Money;
   }>();
+  const dayTotals = new Map<string, {
+    date: string | null;
+    requests: number;
+    pricedRequests: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCost: Money;
+  }>();
   const recentUsage = periodRecords.slice(0, 20).map((record, ordinal) => ({
     timestamp: record.timestamp ? new Date(record.timestamp).toISOString() : null,
     modelName: record.modelName,
@@ -791,9 +1010,24 @@ export async function getCustomerDetail(
     };
     const inputTokens = Number(record.inputTokens);
     const outputTokens = Number(record.outputTokens);
+    const date = record.timestamp
+      ? new Date(record.timestamp).toISOString().slice(0, 10)
+      : null;
+    const dayKey = date ?? '';
+    const day = dayTotals.get(dayKey) ?? {
+      date,
+      requests: 0,
+      pricedRequests: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCost: zeroMoney()
+    };
     totals.requests += 1;
     totals.totalInputTokens += inputTokens;
     totals.totalOutputTokens += outputTokens;
+    day.requests += 1;
+    day.totalInputTokens += inputTokens;
+    day.totalOutputTokens += outputTokens;
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
     const cost = costs[ordinal]?.cost;
@@ -801,10 +1035,13 @@ export async function getCustomerDetail(
       const money = new Prisma.Decimal(cost);
       totals.pricedRequests += 1;
       totals.totalCost = totals.totalCost.plus(money);
+      day.pricedRequests += 1;
+      day.totalCost = day.totalCost.plus(money);
       totalCost = totalCost.plus(money);
       pricedRequests += 1;
     }
     modelTotals.set(modelName, totals);
+    dayTotals.set(dayKey, day);
   }
 
   return {
@@ -820,10 +1057,22 @@ export async function getCustomerDetail(
       modelName,
       requests: totals.requests,
       pricedRequests: totals.pricedRequests,
+      unpricedRequests: totals.requests - totals.pricedRequests,
       totalInputTokens: totals.totalInputTokens,
       totalOutputTokens: totals.totalOutputTokens,
+      totalTokens: totals.totalInputTokens + totals.totalOutputTokens,
       totalCost: toMoneyString(totals.totalCost)
     })).sort((a, b) => new Prisma.Decimal(b.totalCost).comparedTo(a.totalCost)),
+    byDay: Array.from(dayTotals.values(), day => ({
+      date: day.date,
+      requests: day.requests,
+      pricedRequests: day.pricedRequests,
+      unpricedRequests: day.requests - day.pricedRequests,
+      totalInputTokens: day.totalInputTokens,
+      totalOutputTokens: day.totalOutputTokens,
+      totalTokens: day.totalInputTokens + day.totalOutputTokens,
+      totalCost: toMoneyString(day.totalCost)
+    })).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')),
     recentUsage,
     revenueHistory: revenueHistory.map(row => ({
       effectiveMonth: new Date(row.effectiveMonth).toISOString().slice(0, 7),

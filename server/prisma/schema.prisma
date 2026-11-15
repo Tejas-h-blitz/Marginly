@@ -31,10 +31,12 @@ model UsageRecord {
   inputTokens  Int       @map("input_tokens")
   outputTokens Int       @map("output_tokens")
   recordFingerprint String? @map("record_fingerprint")
+  importBatchId String?  @map("import_batch_id")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([userId])
   @@index([userId, customerId])
+  @@index([userId, importBatchId])
   @@index([modelName])
   @@map("usage_records")
 }
@@ -74,7 +76,9 @@ model ImportBatch {
   totalRecords    Int      @map("total_records")
   insertedRecords Int      @map("inserted_records")
   duplicateRecords Int     @map("duplicate_records")
+  withinFileDuplicates Int  @default(0) @map("within_file_duplicates")
   unpricedRecords Int      @map("unpriced_records")
+  duplicateMode String      @default("skip") @map("duplicate_mode")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([userId, createdAt])

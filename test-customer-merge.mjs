@@ -15,7 +15,7 @@ if (!process.env.MARGINLY_TEST_PGLITE_DIR) {
 
 const { apiRouter, getAuthenticatedUserId } = await import('./server/dist/routes/api.js');
 const { checkConnection, db } = await import('./server/dist/db.js');
-const { ensurePricingSeeded } = await import('./server/dist/services/pricingService.js');
+const { ensurePricingSeeded, getUsageCosts } = await import('./server/dist/services/pricingService.js');
 const {
   clearAllData,
   getCustomerDetail,
@@ -126,8 +126,17 @@ try {
   await updateCustomerRevenue(userId, sourceId, '2026-11', '300');
 
   const sourceDetail = await getCustomerDetail(userId, sourceId, 'all');
+  const targetBeforeMerge = await getCustomerDetail(userId, targetId, 'all');
   assert.equal(sourceDetail?.totalRequests, 3);
   assert.equal(sourceDetail?.unpricedRequests, 1);
+  for (const breakdown of [sourceDetail?.models ?? [], sourceDetail?.byDay ?? []]) {
+    assert.equal(breakdown.reduce((sum, row) => sum + row.requests, 0), sourceDetail?.totalRequests);
+    assert.equal(breakdown.reduce((sum, row) => sum + row.totalInputTokens, 0), sourceDetail?.totalInputTokens);
+    assert.equal(breakdown.reduce((sum, row) => sum + row.totalOutputTokens, 0), sourceDetail?.totalOutputTokens);
+    assert.ok(Math.abs(
+      breakdown.reduce((sum, row) => sum + Number(row.totalCost), 0) - Number(sourceDetail?.totalCost)
+    ) < 1e-10);
+  }
   assert.equal(await getCustomerDetail(otherUserId, sourceId, 'all'), null);
 
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -208,11 +217,58 @@ try {
   const targetDetail = await getCustomerDetail(userId, targetId, 'all');
   assert.equal(targetDetail?.totalRequests, 4);
   assert.equal(targetDetail?.unpricedRequests, 1);
+  const duplicateCost = Number((await getUsageCosts(userId, [{
+    modelName: 'gpt-4o',
+    timestamp: new Date('2026-09-10T10:00:00Z'),
+    inputTokens: 1000,
+    outputTokens: 100
+  }]))[0].cost);
+  assert.ok(Math.abs(
+    Number(targetDetail?.totalCost) -
+    (Number(targetBeforeMerge?.totalCost) + Number(sourceDetail?.totalCost) - duplicateCost)
+  ) < 1e-10);
+  for (const breakdown of [targetDetail?.models ?? [], targetDetail?.byDay ?? []]) {
+    assert.equal(breakdown.reduce((sum, row) => sum + row.requests, 0), targetDetail?.totalRequests);
+    assert.equal(breakdown.reduce((sum, row) => sum + row.totalInputTokens, 0), targetDetail?.totalInputTokens);
+    assert.equal(breakdown.reduce((sum, row) => sum + row.totalOutputTokens, 0), targetDetail?.totalOutputTokens);
+    assert.ok(Math.abs(
+      breakdown.reduce((sum, row) => sum + Number(row.totalCost), 0) - Number(targetDetail?.totalCost)
+    ) < 1e-10);
+  }
   assert.deepEqual(
     targetDetail?.revenueHistory.map(row => [row.effectiveMonth, row.monthlyRevenueUsd]),
     [['2026-11', '300.00'], ['2026-10', '150.00'], ['2026-09', '100.00']]
   );
   assert.equal(await getCustomerDetail(otherUserId, 'merge-foreign', 'all').then(row => row?.totalRequests), 1);
+
+  const caseSourceId = 'CUST_CASE_TEST';
+  const caseTargetId = 'cust_case_test';
+  await saveRecords(await processRawRecords([
+    ...[1, 2].map(day => ({
+      customer_id: caseSourceId,
+      timestamp: `2026-12-0${day}T00:00:00Z`,
+      model_name: 'gpt-4o',
+      input_tokens: 1000,
+      output_tokens: 100
+    })),
+    ...[3, 4].map(day => ({
+      customer_id: caseTargetId,
+      timestamp: `2026-12-0${day}T00:00:00Z`,
+      model_name: 'gpt-4o',
+      input_tokens: 2000,
+      output_tokens: 200
+    }))
+  ]), userId);
+  const caseSourceBefore = await getCustomerDetail(userId, caseSourceId, 'all');
+  const caseTargetBefore = await getCustomerDetail(userId, caseTargetId, 'all');
+  await mergeCustomerInto(userId, caseSourceId, caseTargetId);
+  const caseMerged = await getCustomerDetail(userId, caseTargetId, 'all');
+  assert.equal(caseMerged?.totalRequests, 4);
+  assert.ok(Math.abs(
+    Number(caseMerged?.totalCost) -
+    (Number(caseSourceBefore?.totalCost) + Number(caseTargetBefore?.totalCost))
+  ) < 1e-10);
+  assert.equal(await getCustomerDetail(userId, caseSourceId, 'all'), null);
 
   console.log('PASS customer details are authenticated, month-aware, and tenant-scoped');
   console.log('PASS merge rejects customers not owned by the authenticated user without changing records');

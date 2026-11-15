@@ -16,7 +16,11 @@ if (!process.env.MARGINLY_TEST_PGLITE_DIR) {
 const { apiRouter, getAuthenticatedUserId } = await import('./server/dist/routes/api.js');
 const { checkConnection, db } = await import('./server/dist/db.js');
 const { ensurePricingSeeded } = await import('./server/dist/services/pricingService.js');
-const { clearAllData } = await import('./server/dist/services/usageService.js');
+const {
+  clearAllData,
+  processRawRecords,
+  saveImportedRecords
+} = await import('./server/dist/services/usageService.js');
 const secret = process.env.TEST_AUTH_SECRET;
 
 function createToken(userId) {
@@ -84,6 +88,7 @@ try {
     ['POST', '/api/clear'],
     ['GET', '/api/export'],
     ['GET', '/api/import-history'],
+    ['POST', '/api/import-history/test-batch/undo'],
     ['POST', '/api/custom-rates'],
     ['PUT', '/api/custom-rates'],
     ['DELETE', '/api/custom-rates'],
@@ -121,10 +126,24 @@ try {
     headers,
     body: JSON.stringify({ content: rows, format: 'csv' })
   });
-  assert.equal(firstResponse.status, 200);
-  const first = await firstResponse.json();
+  assert.equal(firstResponse.status, 409);
+  const firstPreview = await firstResponse.json();
+  assert.equal(firstPreview.code, 'DUPLICATES');
+  assert.equal(firstPreview.withinFile, 1);
+  assert.equal((await (await fetch(`${baseUrl}/api/summary?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  })).json()).totalRequests, 0);
+
+  const firstSkipResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content: rows, format: 'csv', duplicate_mode: 'skip' })
+  });
+  assert.equal(firstSkipResponse.status, 200);
+  const first = await firstSkipResponse.json();
   assert.equal(first.insertedRecords, 2);
   assert.equal(first.duplicateRecords, 1);
+  assert.equal(first.withinFileDuplicates, 1);
   assert.equal(first.unpricedRecords, 1);
 
   const repeatedResponse = await fetch(`${baseUrl}/api/paste`, {
@@ -132,27 +151,131 @@ try {
     headers,
     body: JSON.stringify({ content: rows, format: 'csv' })
   });
-  assert.equal(repeatedResponse.status, 200);
-  const repeated = await repeatedResponse.json();
+  assert.equal(repeatedResponse.status, 409);
+  const repeatedPreview = await repeatedResponse.json();
+  assert.equal(repeatedPreview.existing, 2);
+  assert.equal(repeatedPreview.withinFile, 1);
+
+  const repeatedSkipResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content: rows, format: 'csv', duplicate_mode: 'skip' })
+  });
+  assert.equal(repeatedSkipResponse.status, 200);
+  const repeated = await repeatedSkipResponse.json();
   assert.equal(repeated.insertedRecords, 0);
   assert.equal(repeated.duplicateRecords, 3);
+
+  const allowedResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content: rows, format: 'csv', duplicate_mode: 'allow' })
+  });
+  assert.equal(allowedResponse.status, 200);
+  const allowed = await allowedResponse.json();
+  assert.equal(allowed.insertedRecords, 3);
+  assert.equal(allowed.duplicateRecords, 3);
+  assert.equal(allowed.batch.duplicateMode, 'allow');
+
+  const otherSameFileResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${createToken(otherUserId)}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ content: rows, format: 'csv', duplicate_mode: 'skip' })
+  });
+  assert.equal(otherSameFileResponse.status, 200);
+  const otherSameFile = await otherSameFileResponse.json();
+  assert.equal(otherSameFile.insertedRecords, 2);
+  assert.equal(otherSameFile.duplicateRecords, 1);
+  const otherHeaders = {
+    Authorization: `Bearer ${createToken(otherUserId)}`,
+    'Content-Type': 'application/json'
+  };
+
+  const aOnlyResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      content: 'customer_id,timestamp,model_name,input_tokens,output_tokens\ncustomer-only-A,2026-10-04T10:02:00Z,gpt-4o,100,100',
+      format: 'csv'
+    })
+  });
+  assert.equal(aOnlyResponse.status, 200);
+  const otherCustomersResponse = await fetch(`${baseUrl}/api/customers?month=all`, {
+    headers: { Authorization: otherHeaders.Authorization }
+  });
+  const otherCustomers = await otherCustomersResponse.json();
+  assert.equal(otherCustomers.some(customer => customer.customerId === 'customer-only-A'), false);
+  const otherSummaryBeforeAUndo = await fetch(`${baseUrl}/api/summary?month=all`, {
+    headers: { Authorization: otherHeaders.Authorization }
+  });
+  assert.equal((await otherSummaryBeforeAUndo.json()).totalRequests, 2);
+  const otherDetailResponse = await fetch(`${baseUrl}/api/customers/customer-only-A/detail?month=all`, {
+    headers: { Authorization: otherHeaders.Authorization }
+  });
+  assert.equal(otherDetailResponse.status, 404);
+  const otherExport = await fetch(`${baseUrl}/api/export?month=all`, {
+    headers: { Authorization: otherHeaders.Authorization }
+  });
+  assert.equal((await otherExport.text()).includes('customer-only-A'), false);
+
+  const aRevenueUpdate = await fetch(`${baseUrl}/api/customers/customer-A/revenue`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ monthly_revenue_usd: '123', effective_month: '2026-10' })
+  });
+  assert.equal(aRevenueUpdate.status, 200);
+  const bRevenueUpdate = await fetch(`${baseUrl}/api/customers/customer-A/revenue`, {
+    method: 'PUT',
+    headers: otherHeaders,
+    body: JSON.stringify({ monthly_revenue_usd: '456', effective_month: '2026-10' })
+  });
+  assert.equal(bRevenueUpdate.status, 200);
+  const aRevenueAfterBEdit = await fetch(`${baseUrl}/api/customers?month=2026-10`, {
+    headers: { Authorization: headers.Authorization }
+  });
+  assert.equal(
+    Number((await aRevenueAfterBEdit.json()).find(customer => customer.customerId === 'customer-A').monthlyRevenueUsd),
+    123
+  );
+
+  const forbiddenUndo = await fetch(`${baseUrl}/api/import-history/${allowed.batch.id}/undo`, {
+    method: 'POST',
+    headers: { Authorization: otherHeaders.Authorization }
+  });
+  assert.equal(forbiddenUndo.status, 404);
+  assert.equal((await (await fetch(`${baseUrl}/api/summary?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  })).json()).totalRequests, 6);
+
+  const undoAllowed = await fetch(`${baseUrl}/api/import-history/${allowed.batch.id}/undo`, {
+    method: 'POST',
+    headers: { Authorization: headers.Authorization }
+  });
+  assert.equal(undoAllowed.status, 200);
+  assert.equal((await undoAllowed.json()).removedRecords, 3);
+  assert.equal((await (await fetch(`${baseUrl}/api/summary?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  })).json()).totalRequests, 3);
 
   const historyResponse = await fetch(`${baseUrl}/api/import-history`, {
     headers: { Authorization: headers.Authorization }
   });
   assert.equal(historyResponse.status, 200);
   const history = await historyResponse.json();
-  assert.equal(history.length, 2);
-  assert.equal(history[0].sourceType, 'paste');
-  assert.equal(history[0].totalRecords, 3);
-  assert.equal(history[0].unpricedRecords, 0);
-  assert.equal(history[1].insertedRecords, 2);
-  assert.equal(history[1].unpricedRecords, 1);
+  assert.equal(history.length, 3);
+  assert.equal(history.every(item => item.sourceType === 'paste'), true);
+  assert.equal(history.some(item => item.totalRecords === 3 && item.withinFileDuplicates === 1), true);
+  assert.equal(history.some(item => item.insertedRecords === 2 && item.unpricedRecords === 1), true);
 
   const otherHistoryResponse = await fetch(`${baseUrl}/api/import-history`, {
-    headers: { Authorization: `Bearer ${createToken(otherUserId)}` }
+    headers: { Authorization: otherHeaders.Authorization }
   });
-  assert.deepEqual(await otherHistoryResponse.json(), []);
+  const otherHistory = await otherHistoryResponse.json();
+  assert.equal(otherHistory.length, 1);
+  assert.equal(otherHistory[0].insertedRecords, 2);
 
   const invalidResponse = await fetch(`${baseUrl}/api/paste`, {
     method: 'POST',
@@ -212,7 +335,46 @@ try {
   const summaryResponse = await fetch(`${baseUrl}/api/summary?month=all`, {
     headers: { Authorization: headers.Authorization }
   });
-  assert.equal((await summaryResponse.json()).totalRequests, 2);
+  assert.equal((await summaryResponse.json()).totalRequests, 3);
+  const baselineCustomersResponse = await fetch(`${baseUrl}/api/customers?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  });
+  const baselineCustomerIds = (await baselineCustomersResponse.json()).map(customer => customer.customerId);
+
+  const sampleLoadResponse = await fetch(`${baseUrl}/api/load-sample`, {
+    method: 'POST',
+    headers: { Authorization: headers.Authorization }
+  });
+  assert.equal(sampleLoadResponse.status, 200);
+  const sampleLoad = await sampleLoadResponse.json();
+  assert.ok(sampleLoad.insertedRecords > 0);
+  const sampleCustomersResponse = await fetch(`${baseUrl}/api/customers?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  });
+  const sampleCustomerIds = (await sampleCustomersResponse.json()).map(customer => customer.customerId);
+  assert.ok(sampleCustomerIds.length > 0);
+  const realImportResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      content: 'customer_id,timestamp,model_name,input_tokens,output_tokens\nreal-import-customer,2026-10-04T10:03:00Z,gpt-4o,100,100',
+      format: 'csv'
+    })
+  });
+  assert.equal(realImportResponse.status, 200);
+  const realImport = await realImportResponse.json();
+  assert.equal(realImport.sampleDataRemoved, true);
+  assert.match(realImport.message, /Previous sample data and its customers were removed/);
+  const customersAfterRealImportResponse = await fetch(`${baseUrl}/api/customers?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  });
+  const customersAfterRealImport = await customersAfterRealImportResponse.json();
+  const sampleOnlyCustomerIds = sampleCustomerIds.filter(id => !baselineCustomerIds.includes(id));
+  assert.ok(sampleOnlyCustomerIds.length > 0);
+  assert.equal(sampleOnlyCustomerIds.some(id => customersAfterRealImport.some(customer => customer.customerId === id)), false);
+  assert.equal((await (await fetch(`${baseUrl}/api/import-history`, {
+    headers: { Authorization: headers.Authorization }
+  })).json()).some(batch => batch.sourceType === 'sample'), false);
 
   const aliasResponse = await fetch(`${baseUrl}/api/paste`, {
     method: 'POST',
@@ -280,6 +442,115 @@ try {
   });
   assert.equal(septemberRevenueUpdate.status, 200);
 
+  const bClearResponse = await fetch(`${baseUrl}/api/clear`, {
+    method: 'POST',
+    headers: { Authorization: otherHeaders.Authorization }
+  });
+  assert.equal(bClearResponse.status, 200);
+  assert.equal((await (await fetch(`${baseUrl}/api/summary?month=all`, {
+    headers: { Authorization: headers.Authorization }
+  })).json()).totalRequests, 5);
+  const bReimportResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers: otherHeaders,
+    body: JSON.stringify({ content: rows, format: 'csv', duplicate_mode: 'skip' })
+  });
+  assert.equal(bReimportResponse.status, 200);
+  assert.equal((await bReimportResponse.json()).insertedRecords, 2);
+
+  const threeDuplicateRowsUser = `${userId}_three`;
+  const identicalTimestampedRow = 'same-customer,2026-10-04T10:00:00Z,gpt-4o,100,100';
+  const threeDuplicateResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${createToken(threeDuplicateRowsUser)}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      content: `customer_id,timestamp,model_name,input_tokens,output_tokens\n${identicalTimestampedRow}\n${identicalTimestampedRow}\n${identicalTimestampedRow}`,
+      format: 'csv'
+    })
+  });
+  assert.equal(threeDuplicateResponse.status, 409);
+  assert.equal((await threeDuplicateResponse.json()).withinFile, 2);
+
+  const untimestampedUser = `${userId}_undated`;
+  const untimestampedRows = 'customer_id,model_name,input_tokens,output_tokens\nundated-customer,gpt-4o,100,100\nundated-customer,gpt-4o,100,100';
+  const undatedHeaders = {
+    Authorization: `Bearer ${createToken(untimestampedUser)}`,
+    'Content-Type': 'application/json'
+  };
+  const undatedFirstResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers: undatedHeaders,
+    body: JSON.stringify({ content: untimestampedRows, format: 'csv' })
+  });
+  assert.equal(undatedFirstResponse.status, 200);
+  assert.equal((await undatedFirstResponse.json()).withinFileDuplicates, 0);
+  const undatedRepeatedResponse = await fetch(`${baseUrl}/api/paste`, {
+    method: 'POST',
+    headers: undatedHeaders,
+    body: JSON.stringify({ content: untimestampedRows, format: 'csv' })
+  });
+  assert.equal(undatedRepeatedResponse.status, 200);
+  assert.equal((await undatedRepeatedResponse.json()).insertedRecords, 2);
+
+  const atomicUserId = `${userId}_atomic`;
+  const suffix = Date.now();
+  const functionName = `import_atomic_failure_${suffix}`;
+  const triggerName = `import_atomic_failure_${suffix}`;
+  let atomicTriggerCreated = false;
+  let atomicFunctionCreated = false;
+  try {
+    await db.$queryRaw(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.user_id = '${atomicUserId}' AND NEW.input_tokens = 987654 THEN
+          RAISE EXCEPTION 'injected final-chunk import failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+    `);
+    atomicFunctionCreated = true;
+    await db.$queryRaw(
+      `CREATE TRIGGER ${triggerName} BEFORE INSERT ON usage_records
+       FOR EACH ROW EXECUTE FUNCTION ${functionName}();`
+    );
+    atomicTriggerCreated = true;
+    const atomicRecords = await processRawRecords(Array.from({ length: 1001 }, (_, index) => ({
+      customer_id: `atomic-customer-${index}`,
+      timestamp: new Date(Date.UTC(2026, 9, 1, 0, index)).toISOString(),
+      model_name: 'gpt-4o',
+      input_tokens: index === 1000 ? 987654 : 100,
+      output_tokens: 100
+    })));
+    await assert.rejects(saveImportedRecords(atomicRecords, atomicUserId, {
+      sourceName: 'atomic-failure.csv',
+      sourceType: 'paste',
+      duplicateMode: 'skip'
+    }), /injected final-chunk import failure/);
+    const remainingRows = await db.$queryRaw(
+      'SELECT COUNT(*)::integer AS count FROM usage_records WHERE user_id = $1;',
+      atomicUserId
+    );
+    const remainingBatches = await db.$queryRaw(
+      'SELECT COUNT(*)::integer AS count FROM import_batches WHERE user_id = $1;',
+      atomicUserId
+    );
+    const remainingCustomers = await db.$queryRaw(
+      'SELECT COUNT(*)::integer AS count FROM customers WHERE user_id = $1;',
+      atomicUserId
+    );
+    assert.equal(Number(remainingRows[0].count), 0);
+    assert.equal(Number(remainingBatches[0].count), 0);
+    assert.equal(Number(remainingCustomers[0].count), 0);
+  } finally {
+    if (atomicTriggerCreated) await db.$queryRaw(`DROP TRIGGER ${triggerName} ON usage_records;`);
+    if (atomicFunctionCreated) await db.$queryRaw(`DROP FUNCTION ${functionName}();`);
+  }
+
   const customRateResponse = await fetch(`${baseUrl}/api/custom-rates`, {
     method: 'POST',
     headers,
@@ -321,18 +592,24 @@ try {
   });
   assert.deepEqual((await clearedPricing.json()).custom, []);
   const otherPricing = await fetch(`${baseUrl}/api/pricing`, {
-    headers: { Authorization: `Bearer ${createToken(otherUserId)}` }
+    headers: { Authorization: otherHeaders.Authorization }
   });
   assert.equal((await otherPricing.json()).custom.length, 1);
   const clearedSummary = await fetch(`${baseUrl}/api/summary?month=all`, {
     headers: { Authorization: headers.Authorization }
   });
   assert.equal((await clearedSummary.json()).totalRequests, 0);
+  const otherSummary = await fetch(`${baseUrl}/api/summary?month=all`, {
+    headers: { Authorization: `Bearer ${createToken(otherUserId)}` }
+  });
+  assert.equal((await otherSummary.json()).totalRequests, 2);
 
   console.log(`PASS all ${unauthenticatedApiRequests.length} API routes reject unauthenticated requests with 401`);
   console.log('PASS parser errors and oversized unauthenticated API requests still return 401');
-  console.log('PASS paste import deduplicates repeated rows and reports new unpriced record count');
-  console.log('PASS repeated imports are idempotent and recorded in user-scoped history');
+  console.log('PASS duplicate preview writes nothing; skip, allow, within-file counts, and undo work');
+  console.log('PASS timestamped within-file duplicates and untimestamped duplicate exclusions');
+  console.log('PASS injected final-chunk failure rolls back the entire import');
+  console.log('PASS identical file contents are deduplicated only within the owning user');
   console.log('PASS invalid batches are rejected before writes');
   console.log('PASS required model and token fields reject malformed rows');
   console.log('PASS paste and uploaded files above 10 MB return 413');
@@ -342,5 +619,9 @@ try {
 } finally {
   await new Promise(resolve => server.close(resolve));
   await clearAllData(userId);
+  await clearAllData(otherUserId);
+  await clearAllData(`${userId}_three`);
+  await clearAllData(`${userId}_undated`);
+  await clearAllData(`${userId}_atomic`);
   await db.$disconnect();
 }

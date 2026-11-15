@@ -31,6 +31,7 @@ export interface CustomerBreakdown {
   monthlyRevenueUsd: string | null;
   totalRequests: number;
   pricedRequests: number;
+  unpricedRequests: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
@@ -71,4 +72,5 @@ export interface UsageSummary {
 export interface PastePayload {
   content: string;
   format?: 'csv' | 'json';
+  duplicate_mode?: 'detect' | 'skip' | 'allow';
 }

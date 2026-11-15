@@ -38,6 +38,23 @@ Marginly operates on an **import-based ingestion model**; it does not require di
 - **Primary Database:** PostgreSQL 14+ via standard connection pooling (`DATABASE_URL`)
 - **Embedded Developer Engine:** `@electric-sql/pglite` (v0.5.8), used as a zero-dependency local PostgreSQL-compatible fallback with automatic application of the project's SQL migrations
 
+### Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string; required in production |
+| `PORT` | Express listening port; defaults to `3001` |
+| `CLIENT_URL` | Allowed client origin; defaults to `http://localhost:5173` |
+| `CLERK_SECRET_KEY` | Clerk backend verification key |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk browser publishable key |
+| `CLERK_PUBLISHABLE_KEY` | Optional server-side alias for the publishable key |
+| `NODE_ENV` | Runtime environment; signed test auth is only enabled when set to `test` |
+| `TEST_AUTH_SECRET` | Required with `NODE_ENV=test` for test JWT verification; forbidden in production |
+| `MARGINLY_TEST_PGLITE_DIR` | Disposable PGlite data directory for database tests |
+| `VITE_FEEDBACK_EMAIL` | Optional landing-page feedback email destination |
+
+There is no demo identity or unauthenticated demo mode. All `/api` endpoints require a verified Clerk user except for signed test tokens in the explicitly configured test environment; `/health` is public.
+
 ### Quality, Security & Testing Tooling
 - **Auth & JWT Security Suite:** `test-auth-security.mjs` (13-point security verification suite enforcing token validity, tamper prevention, and environment guards)
 - **End-to-End Test Harness:** `test-e2e.mjs` (validates end-to-end user workflows, file imports, revenue updates, and export fidelity)
@@ -67,6 +84,7 @@ A right-side slide-over modal designed for high-clarity data ingestion:
   3. **Revenue CSV:** Dedicated uploader for importing customer revenue versions, optionally scoped by `effective_month`.
 - **Structured Schema Reference Cards:** Compact 2x2 specification grids detailing expected column names (`customer_id`, `model_name`, `input_tokens`, `output_tokens`, `timestamp`), field requirements (`REQ` vs `OPT`), and one-click template download links.
 - **Validation & Error Feedback:** The server validates each row and rejects an invalid batch without partial writes. Errors identify rejected row numbers.
+- **Duplicate decisions:** A default import with timestamped duplicates returns `409 DUPLICATES` and writes nothing. Retrying with `duplicate_mode=skip` inserts non-duplicates only; `duplicate_mode=allow` inserts every row. Rows without timestamps are not checked for duplicates. Imports are committed in 1,000-row chunks within one transaction and can be undone by their owner through import history.
 - **Privacy Disclosure:** Upload bytes are transmitted to the service and parsed in memory. Marginly persists supported usage fields, revenue, import metadata, and custom rates, not prompt or completion text. Users are told not to include unneeded content.
 - **Anchored Demo Action:** Bottom-pinned action enabling users to explore the dashboard instantly with 8 preloaded customer accounts.
 
@@ -91,6 +109,7 @@ The core application workspace for analyzing customer LLM expenditure:
 - **Model Pricing Dialog (`PricingModal.tsx`):** Shows active and upcoming global prices, account-specific effective-dated rates, and supports custom-rate add/edit/delete in USD per million tokens.
 - **Export & Maintenance Actions:**
   - One-click CSV export of customer margins with the pricing basis disclosed.
+  - The CSV includes `unpriced_requests` alongside total and priced request counts.
   - Account-scoped clear action removes usage, customers/revenue, import history, and custom rates atomically.
 
 ---
@@ -112,6 +131,7 @@ Each usage row requires a customer ID, model identifier, and non-negative whole-
 - Account-specific rates take precedence over global catalog rates. A model without an effective rate yields a null cost, is excluded from cost totals, and appears in the dashboard's unpriced-model warning with a request count.
 - Existing records are recalculated on query when pricing versions change. Version history records effective dates; price changes are not retroactively applied before their effective date.
 - Untimestamped usage is costed using the rate effective at query time and appears only in the all-time period view.
+- Imported models without a matching effective rate have null cost, are excluded from cost/margin totals, and are reported by model name and request count. Import responses include the count of unpriced rows.
 
 ### 4.3 Margin & Unit Economics Formulations
 For any customer $i$ in a selected month:
@@ -162,6 +182,7 @@ All routes except `/health` require an `Authorization: Bearer <clerk_token>` hea
 | `GET` | `/api/pricing` | Retrieve active, upcoming, and custom pricing rates | Authenticated |
 | `POST`, `PUT`, `DELETE` | `/api/custom-rates` | Create, update, and delete account-specific effective-dated rates | Authenticated |
 | `GET` | `/api/import-history` | Retrieve account-scoped import batches | Authenticated |
+| `POST` | `/api/import-history/:batchId/undo` | Remove one owned import batch | Authenticated |
 | `POST` | `/api/upload` | Upload and ingest usage log files (multipart CSV / JSON) | Authenticated |
 | `POST` | `/api/paste` | Ingest raw pasted CSV text or JSON array payload | Authenticated |
 | `POST` | `/api/load-sample` | Seed authenticated user's account with realistic sample customer usage | Authenticated |
@@ -176,14 +197,22 @@ All routes except `/health` require an `Authorization: Bearer <clerk_token>` hea
 - `UsageRecord`: user/customer, optional timestamp, model name, raw input/output token counts, and import fingerprint. Dollar cost is not stored.
 - `ModelPricing`: shared model display/provider metadata. Pricing rates are stored separately.
 - `PriceVersion`: effective-dated global (`__global__`) and user-specific rates, unique by owner/model/effective date.
-- `ImportBatch`: per-user import source, record counts, unpriced count, and creation time.
+- `ImportBatch`: per-user import source, total/inserted/duplicate/within-file duplicate/unpriced counts, duplicate mode, and creation time. Usage rows retain their owning import batch for undo; timestamp-less rows have no duplicate fingerprint.
 - `RevenueVersion`: per-user/customer revenue versions by effective month; null versions represent explicit clearing.
 
-The additive migrations are in `server/prisma/migrations/`. Local PGlite applies them at startup; external PostgreSQL deployments must apply them before deploying the corresponding server code.
+The additive migrations are in `server/prisma/migrations/`; the Phase F duplicate-mode migration is `20261117000000_import_duplicate_modes`. Local PGlite applies the compatible current schema at startup; external PostgreSQL deployments must apply all pending Prisma migrations before deploying the corresponding server code.
+
+## 8. Known Limitations
+
+- Revenue totals cover active customers only.
+- Rows without timestamps are excluded from duplicate checks.
+- Customer merges are transactional but cannot be undone.
+- Costs use effective list prices for text-token counts; provider invoices, negotiated discounts, and non-text billing are not modeled.
+- Import payloads are processed in memory and capped at 10 MiB.
 
 ---
 
-## 8. Development & Build Lifecycle
+## 9. Development & Build Lifecycle
 
 ### Available Scripts (Root `package.json`)
 - `npm run dev:client` — Launches Vite development server on `http://localhost:5173`.
@@ -196,12 +225,20 @@ The additive migrations are in `server/prisma/migrations/`. Local PGlite applies
 - `npm run test:imports` — Checks all-route unauthenticated responses, atomic imports, duplicate handling, limits, and scoped clearing.
 - `npm run test:revenue` — Checks effective-month revenue, imports, and isolation.
 - `npm run test:customers` — Checks detail/merge ownership, duplicate collapse, target-wins revenue, and transaction rollback.
-- `npm run test:stress` — Runs 35 UTC-boundary and regression checks in each of four time zones.
+- `npm run test:stress` — Runs 41 UTC-boundary, pricing, and revenue assertions in each of four time zones.
+- `npm run test:performance` — Measures a generated 50,000-row import and the `/api/summary` and `/api/customers` response times.
 
 Use an isolated PGlite copy for database tests by setting `MARGINLY_TEST_PGLITE_DIR` while `NODE_ENV=test`; never point tests at production or the active developer database.
 
 ---
 
-## 9. Current Status & Verification
+## 10. Current Status & Verification
 
-The project build runs the client TypeScript/Vite production build, generates Prisma Client, and compiles the server. Focused regression scripts cover pricing versions, imports, revenue history, customer merge/detail, authentication, and multi-time-zone UTC boundaries. Update this section with exact run results before each release; the Privacy and Terms drafts require deployment-specific completion and legal review.
+The build runs the client TypeScript/Vite production build, generates Prisma Client, and compiles the server. Focused regression scripts cover pricing versions, imports, revenue history, customer merge/detail, authentication, and UTC boundaries across four time zones. The 50,000-row benchmark ran on Windows with Node v22.17.1, embedded PGlite, a 12th Gen Intel Core i5-1235U (10 cores / 12 logical processors), and 7.68 GiB RAM:
+
+| Run | Import | `/api/summary` | `/api/customers` |
+|---|---:|---:|---:|
+| 1 | 6,651.95 ms | 1,340.28 ms | 1,284.00 ms |
+| 2 | 14,447.54 ms | 990.29 ms | 3,498.26 ms |
+
+These local measurements varied materially and are not performance guarantees. A matching pre-Phase-F run did not complete after 11 minutes and was stopped, so there is no completed before/after comparison. The Privacy and Terms drafts still require deployment-specific completion and legal review.

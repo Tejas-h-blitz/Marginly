@@ -94,6 +94,22 @@ try {
   }), null);
   assert.equal(await deleteCustomRate(otherUserId, customRate.id), false);
 
+  const exactCustomRate = await createCustomRate(userId, {
+    model_name: 'acme-llm-v9',
+    input_per_million: '2',
+    output_per_million: '4',
+    effective_from: '2020-01-01'
+  });
+  customRateIds.push(exactCustomRate.id);
+  const exactCustomUsage = [{
+    modelName: 'acme-llm-v9',
+    timestamp: new Date('2026-06-01T00:00:00Z'),
+    inputTokens: 20000,
+    outputTokens: 5000
+  }];
+  assert.equal(Number((await getUsageCosts(userId, exactCustomUsage))[0].cost), 0.06);
+  assert.equal((await getUsageCosts(otherUserId, exactCustomUsage))[0].cost, null);
+
   const catalogOverride = await createCustomRate(userId, {
     model_name: 'gemini-3.8-flash',
     input_per_million: '4',

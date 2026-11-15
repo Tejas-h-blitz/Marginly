@@ -18,6 +18,7 @@
     "test:pricing": "node test-pricing-versions.mjs",
     "test:imports": "node test-import-safety.mjs",
     "test:revenue": "node test-revenue-history.mjs",
-    "test:customers": "node test-customer-merge.mjs"
+    "test:customers": "node test-customer-merge.mjs",
+    "test:performance": "node test-performance-50k.mjs"
   }
 }

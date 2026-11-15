@@ -9,6 +9,7 @@ import { ConcentrationBanner } from './components/app/ConcentrationBanner.js';
 import { DataQualityStrip } from './components/app/DataQualityStrip.js';
 import { ImportDrawer } from './components/app/ImportDrawer.js';
 import { CustomerDetailModal } from './components/app/CustomerDetailModal.js';
+import { DuplicateImportModal } from './components/app/DuplicateImportModal.js';
 import { KpiGrid } from './components/KpiGrid.js';
 import { CostChart } from './components/CostChart.js';
 import { CustomerTable } from './components/CustomerTable.js';
@@ -23,8 +24,16 @@ import {
   AlertNotification,
   PriceVersionItem,
   ImportHistoryItem,
-  CustomerDetail
+  CustomerDetail,
+  DuplicateImportPreview
 } from './types/index.js';
+
+type PendingDuplicateImport = {
+  preview: DuplicateImportPreview;
+  source:
+    | { kind: 'file'; file: File }
+    | { kind: 'paste'; content: string; format: 'csv' | 'json' };
+};
 
 const INITIAL_SUMMARY: UsageSummary = {
   month: 'all',
@@ -61,6 +70,7 @@ function MainAppContent() {
   const [upcomingRates, setUpcomingRates] = useState<PriceVersionItem[]>([]);
   const [customRates, setCustomRates] = useState<PriceVersionItem[]>([]);
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
+  const [pendingDuplicateImport, setPendingDuplicateImport] = useState<PendingDuplicateImport | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
@@ -398,7 +408,7 @@ function MainAppContent() {
     }
   };
 
-  const handleUploadFile = async (file: File): Promise<boolean> => {
+  const handleUploadFile = async (file: File, duplicateMode: 'detect' | 'skip' | 'allow' = 'detect'): Promise<boolean> => {
     if (file.size > 10 * 1024 * 1024) {
       showAlert('Files must be 10 MB or smaller.', 'error');
       return false;
@@ -407,6 +417,7 @@ function MainAppContent() {
     showAlert(`Uploading '${file.name}'...`, 'info');
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('duplicate_mode', duplicateMode);
 
     try {
       const authHeaders = await getAuthHeaders();
@@ -417,6 +428,13 @@ function MainAppContent() {
         body: formData
       });
       const data = await res.json();
+      if (res.status === 409 && data.code === 'DUPLICATES') {
+        setPendingDuplicateImport({
+          preview: data as DuplicateImportPreview,
+          source: { kind: 'file', file }
+        });
+        return false;
+      }
       if (!res.ok) throw new Error(data.error || 'Upload failed');
 
       showAlert(data.message, 'success');
@@ -431,7 +449,11 @@ function MainAppContent() {
     }
   };
 
-  const handlePasteSubmit = async (content: string, format: 'csv' | 'json'): Promise<boolean> => {
+  const handlePasteSubmit = async (
+    content: string,
+    format: 'csv' | 'json',
+    duplicateMode: 'detect' | 'skip' | 'allow' = 'detect'
+  ): Promise<boolean> => {
     if (new TextEncoder().encode(content).byteLength > 10 * 1024 * 1024) {
       showAlert('Pasted usage data must be 10 MB or smaller.', 'error');
       return false;
@@ -448,9 +470,16 @@ function MainAppContent() {
           ...authHeaders
         },
         credentials: 'include',
-        body: JSON.stringify({ content, format })
+        body: JSON.stringify({ content, format, duplicate_mode: duplicateMode })
       });
       const data = await res.json();
+      if (res.status === 409 && data.code === 'DUPLICATES') {
+        setPendingDuplicateImport({
+          preview: data as DuplicateImportPreview,
+          source: { kind: 'paste', content, format }
+        });
+        return false;
+      }
       if (!res.ok) throw new Error(data.error || 'Processing failed');
 
       showAlert(data.message, 'success');
@@ -462,6 +491,36 @@ function MainAppContent() {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDuplicateDecision = async (duplicateMode: 'skip' | 'allow') => {
+    if (!pendingDuplicateImport) return;
+    const pending = pendingDuplicateImport;
+    const succeeded = pending.source.kind === 'file'
+      ? await handleUploadFile(pending.source.file, duplicateMode)
+      : await handlePasteSubmit(pending.source.content, pending.source.format, duplicateMode);
+    if (succeeded) {
+      setPendingDuplicateImport(null);
+      setIsImportOpen(false);
+    }
+  };
+
+  const handleUndoImport = async (batchId: string): Promise<void> => {
+    if (!window.confirm('Undo this import? Only records added by this batch will be removed. This cannot be undone.')) return;
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`/api/import-history/${encodeURIComponent(batchId)}/undo`, {
+        method: 'POST',
+        headers: authHeaders,
+        credentials: 'include'
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to undo import.');
+      showAlert(data.message, 'success');
+      await Promise.all([loadData(), loadImportHistory()]);
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to undo import.', 'error');
     }
   };
 
@@ -624,8 +683,16 @@ function MainAppContent() {
             onPasteSubmit={handlePasteSubmit}
             onLoadSample={handleLoadSample}
             onImportRevenue={handleRevenueImport}
+            onUndoImport={handleUndoImport}
             loading={loading}
             importHistory={importHistory}
+          />
+
+          <DuplicateImportModal
+            preview={pendingDuplicateImport?.preview ?? null}
+            loading={loading}
+            onChoose={mode => void handleDuplicateDecision(mode)}
+            onCancel={() => setPendingDuplicateImport(null)}
           />
 
           {/* Model Pricing Reference Modal */}

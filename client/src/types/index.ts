@@ -3,6 +3,7 @@ export interface CustomerBreakdown {
   monthlyRevenueUsd: string | null;
   totalRequests: number;
   pricedRequests: number;
+  unpricedRequests: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
@@ -100,8 +101,19 @@ export interface ImportHistoryItem {
   totalRecords: number;
   insertedRecords: number;
   duplicateRecords: number;
+  withinFileDuplicates: number;
   unpricedRecords: number;
+  duplicateMode: 'skip' | 'allow';
   createdAt: string;
+}
+
+export interface DuplicateImportPreview {
+  requiresDecision: true;
+  code: 'DUPLICATES';
+  totalRecords: number;
+  withinFile: number;
+  existing: number;
+  totalDuplicates: number;
 }
 
 export interface AlertNotification {

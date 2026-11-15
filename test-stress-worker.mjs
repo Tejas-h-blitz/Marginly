@@ -6,6 +6,8 @@ import {
   saveRecords,
   getOverallSummary,
   getCustomersBreakdown,
+  getCustomerDetail,
+  updateCustomerRevenue,
   clearAllData
 } from './server/dist/services/usageService.js';
 import { checkConnection } from './server/dist/db.js';
@@ -133,6 +135,59 @@ async function run() {
   assert(Math.abs(Number(summaryAll.totalCost) - 15.9288) < 0.000001,
     'All-time cost is 15.9288',
     `totalCost: $${summaryAll.totalCost}`);
+
+  const revenueUserId = `phase_f_revenue_${Date.now()}`;
+  const revenueRecords = await processRawRecords(['2026-08-15', '2026-09-15', '2026-10-15'].map(date => ({
+    customer_id: 'rev_test',
+    timestamp: `${date}T12:00:00Z`,
+    model_name: 'gemini-2.5-flash',
+    input_tokens: 10000,
+    output_tokens: 2000
+  })));
+  await saveRecords(revenueRecords, revenueUserId);
+  await updateCustomerRevenue(revenueUserId, 'rev_test', '2026-09', '100');
+  await updateCustomerRevenue(revenueUserId, 'rev_test', '2026-10', '150');
+  const augustRevenueSummary = await getOverallSummary(revenueUserId, '2026-08');
+  const septemberRevenueSummary = await getOverallSummary(revenueUserId, '2026-09');
+  const octoberRevenueSummary = await getOverallSummary(revenueUserId, '2026-10');
+  assert(augustRevenueSummary.totalCost === '0.008' && augustRevenueSummary.totalMarginUsd === null,
+    'Phase F August revenue baseline is null with $0.008 cost',
+    `${augustRevenueSummary.totalCost}/${augustRevenueSummary.totalMarginUsd}`);
+  assert(septemberRevenueSummary.totalCost === '0.008' && septemberRevenueSummary.totalMarginUsd === '99.992',
+    'Phase F September margin is $99.992',
+    `${septemberRevenueSummary.totalCost}/${septemberRevenueSummary.totalMarginUsd}`);
+  assert(octoberRevenueSummary.totalCost === '0.008' && octoberRevenueSummary.totalMarginUsd === '149.992',
+    'Phase F October margin is $149.992',
+    `${octoberRevenueSummary.totalCost}/${octoberRevenueSummary.totalMarginUsd}`);
+  const revenueDetail = await getCustomerDetail(revenueUserId, 'rev_test', 'all');
+  assert(revenueDetail?.totalRequests === 3 && revenueDetail.totalCost === '0.024',
+    'Phase F revenue detail totals three monthly requests');
+
+  const priceBoundaryUserId = `phase_f_prices_${Date.now()}`;
+  const boundaryRecords = await processRawRecords([
+    {
+      customer_id: 'price-boundary',
+      timestamp: '2026-12-31T23:59:59Z',
+      model_name: 'gemini-3.8-flash',
+      input_tokens: 10000,
+      output_tokens: 2000
+    },
+    {
+      customer_id: 'price-boundary',
+      timestamp: '2027-01-01T00:00:00Z',
+      model_name: 'gemini-3.8-flash',
+      input_tokens: 10000,
+      output_tokens: 2000
+    }
+  ]);
+  await saveRecords(boundaryRecords, priceBoundaryUserId);
+  const beforePriceChange = await getOverallSummary(priceBoundaryUserId, '2026-12');
+  const atPriceChange = await getOverallSummary(priceBoundaryUserId, '2027-01');
+  assert(beforePriceChange.totalCost === '0.015', 'Phase F price before effective boundary is $0.015');
+  assert(atPriceChange.totalCost === '0.03', 'Phase F price at effective boundary is $0.030');
+
+  await clearAllData(revenueUserId);
+  await clearAllData(priceBoundaryUserId);
 
   // Cleanup
   await clearAllData(userId);
