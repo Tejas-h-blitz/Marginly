@@ -320,7 +320,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col space-y-5 min-h-full">
+    <div className="flex flex-col gap-4">
       {/* Sleek Segmented Switcher with Micro-Icons */}
       <div className="p-1 rounded-xl bg-zinc-100/90 dark:bg-[#15171c] border border-zinc-200/90 dark:border-zinc-800/80 grid grid-cols-3 gap-1 text-xs font-medium shrink-0">
         <button
@@ -419,7 +419,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
 
       {/* Tab 1: Upload File */}
       {activeTab === 'upload' && (
-        <div className="flex-1 flex flex-col justify-between space-y-4 min-h-0">
+        <div className="flex flex-col gap-4">
           <div className="space-y-4">
             {/* Proportional, Compact Dropzone */}
             <div
@@ -547,22 +547,11 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Privacy & Ingestion Callout */}
-            <div className="flex items-start gap-2.5 p-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/30 text-xs text-zinc-600 dark:text-zinc-400">
-              <svg className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <p className="leading-relaxed text-[11px]">
-                <strong className="font-medium text-zinc-900 dark:text-zinc-200">Tenant-isolated parsing: </strong>
-                Upload only the fields needed for analysis. File contents are processed in memory; Marginly stores customer IDs, model names, token counts, timestamps, and revenue—not prompt or completion text.
-              </p>
-            </div>
           </div>
 
           {/* Discreet Sample Data Action - Anchored to Bottom */}
           {onLoadSample && (
-            <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1 shrink-0">
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1">
               <span>Want to test instantly? Populates sample logs across 8 accounts.</span>
               <button
                 type="button"
@@ -579,7 +568,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
 
       {/* Tab 2: Paste Raw Text */}
       {activeTab === 'paste' && (
-        <div className="flex-1 flex flex-col justify-between space-y-4 min-h-0">
+        <div className="flex flex-col gap-4">
           <div className="space-y-4">
             <div className="flex justify-between items-center text-xs">
               <div className="flex items-center gap-2">
@@ -667,19 +656,11 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
                 <code className="font-mono text-[11px] px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">output_tokens</code>
               </div>
             </div>
-
-            {/* Ingestion tip */}
-            <div className="p-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/30 text-xs text-zinc-600 dark:text-zinc-400">
-              <p className="leading-relaxed text-[11px]">
-                <strong className="font-medium text-zinc-900 dark:text-zinc-200">Catalog matching: </strong>
-                Model names (e.g. <code className="font-mono text-[10px] px-1 py-0.5 bg-zinc-200/60 dark:bg-zinc-800 rounded">gpt-4o</code>, <code className="font-mono text-[10px] px-1 py-0.5 bg-zinc-200/60 dark:bg-zinc-800 rounded">claude-3-5-sonnet</code>) are automatically mapped to official API rates.
-              </p>
-            </div>
           </div>
 
           {/* Bottom Anchored Demo Action */}
           {onLoadSample && (
-            <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1 shrink-0">
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1">
               <span>Don't have logs handy? Explore with preloaded demo data.</span>
               <button
                 type="button"
@@ -696,7 +677,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
 
       {/* Tab 3: Customer Revenue */}
       {activeTab === 'revenue' && (
-        <div className="flex-1 flex flex-col justify-between space-y-4 min-h-0">
+        <div className="flex flex-col gap-4">
           <div className="space-y-4">
             {/* Proportional Revenue Dropzone */}
             <div
@@ -812,21 +793,10 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Why Revenue Matters Callout */}
-            <div className="flex items-start gap-2.5 p-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/30 text-xs text-zinc-600 dark:text-zinc-400">
-              <svg className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-              <p className="leading-relaxed text-[11px]">
-                <strong className="font-medium text-zinc-900 dark:text-zinc-200">Unit economics calculation: </strong>
-                Comparing monthly contract revenue against LLM spend calculates blended gross margins and pinpoints accounts where AI costs exceed subscription fees.
-              </p>
-            </div>
           </div>
 
           {/* Bottom Table Inline Edit Hint */}
-          <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1 shrink-0">
+          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1">
             <span>You can also edit revenue per customer directly on the dashboard table.</span>
             {onLoadSample && (
               <button
