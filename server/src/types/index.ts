@@ -18,6 +18,7 @@ export interface CalculatedRecord {
   customerId: string;
   timestamp: Date | null;
   modelName: string;
+  normalizedModelName: string;
   resolvedModel: string | null;
   inputTokens: number;
   outputTokens: number;

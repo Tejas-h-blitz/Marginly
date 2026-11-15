@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ImportSection } from '../ImportSection.js';
+import { ImportHistoryItem } from '../../types/index.js';
 
 interface ImportDrawerProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface ImportDrawerProps {
   onLoadSample: () => void;
   onImportRevenue: (file: File) => Promise<boolean>;
   loading: boolean;
+  importHistory: ImportHistoryItem[];
 }
 
 export const ImportDrawer: React.FC<ImportDrawerProps> = ({
@@ -18,7 +20,8 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
   onPasteSubmit,
   onLoadSample,
   onImportRevenue,
-  loading
+  loading,
+  importHistory
 }) => {
   const closeButton = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -149,6 +152,29 @@ export const ImportDrawer: React.FC<ImportDrawerProps> = ({
             loading={loading}
             externalError={drawerError}
           />
+          <section aria-label="Recent usage imports" className="mt-6 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Recent usage imports</h4>
+            {importHistory.length === 0 ? (
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">No usage imports recorded yet.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+                {importHistory.map(batch => (
+                  <li key={batch.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-zinc-800 dark:text-zinc-200">{batch.sourceName}</p>
+                      <time className="mt-0.5 block text-[10px] text-zinc-500 dark:text-zinc-400" dateTime={batch.createdAt}>
+                        {new Date(batch.createdAt).toLocaleString()}
+                      </time>
+                    </div>
+                    <div className="shrink-0 text-right text-[10px] text-zinc-500 dark:text-zinc-400">
+                      <p>{batch.insertedRecords} added · {batch.duplicateRecords} duplicates</p>
+                      <p>{batch.unpricedRecords} unpriced of {batch.totalRecords}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
     </div>

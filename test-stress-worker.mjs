@@ -9,6 +9,7 @@ import {
   clearAllData
 } from './server/dist/services/usageService.js';
 import { checkConnection } from './server/dist/db.js';
+import { ensurePricingSeeded } from './server/dist/services/pricingService.js';
 
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
@@ -36,6 +37,7 @@ async function run() {
   console.log(`${BOLD}====================================================${RESET}\n`);
 
   await checkConnection();
+  await ensurePricingSeeded();
   const userId = `stress_test_user_${Date.now()}`;
 
   // Step 1: Clean slate
@@ -102,6 +104,14 @@ async function run() {
 
   assert(summaryOct.totalCustomers === 15, '2026-10 active customer count is 15', `totalCustomers: ${summaryOct.totalCustomers}`);
   assert(customersOct.length === 15, '2026-10 customer breakdown length is 15', `length: ${customersOct.length}`);
+  assert(summaryOct.totalRequests === 78, '2026-10 total requests is 78', `requests: ${summaryOct.totalRequests}`);
+  assert(summaryOct.pricedRequests === 73, '2026-10 priced requests is 73', `pricedRequests: ${summaryOct.pricedRequests}`);
+  assert(summaryOct.unpricedModels.reduce((sum, model) => sum + model.requestCount, 0) === 5,
+    '2026-10 unpriced requests is 5',
+    `unpricedRequests: ${summaryOct.unpricedModels.reduce((sum, model) => sum + model.requestCount, 0)}`);
+  assert(Math.abs(Number(summaryOct.totalCost) - 10.0111) < 0.000001,
+    '2026-10 cost is 10.0111',
+    `totalCost: $${summaryOct.totalCost}`);
   const cust04Oct = customersOct.find(c => c.customerId === 'cust_04_highvolume');
   assert(cust04Oct?.totalRequests === 15, 'cust_04_highvolume has 15 requests in 2026-10', `requests: ${cust04Oct?.totalRequests}`);
   const cust17Oct = customersOct.find(c => c.customerId === 'cust_17_month_boundary');
@@ -115,6 +125,14 @@ async function run() {
   const customersAll = await getCustomersBreakdown(userId, 'all');
   assert(summaryAll.totalCustomers === 18, 'All-time view shows all 18 customers', `totalCustomers: ${summaryAll.totalCustomers}`);
   assert(customersAll.length === 18, 'All-time customer breakdown has 18 rows', `rows: ${customersAll.length}`);
+  assert(summaryAll.totalRequests === 126, 'All-time requests is 126', `requests: ${summaryAll.totalRequests}`);
+  assert(summaryAll.pricedRequests === 121, 'All-time priced requests is 121', `pricedRequests: ${summaryAll.pricedRequests}`);
+  assert(summaryAll.unpricedModels.reduce((sum, model) => sum + model.requestCount, 0) === 5,
+    'All-time unpriced requests is 5',
+    `unpricedRequests: ${summaryAll.unpricedModels.reduce((sum, model) => sum + model.requestCount, 0)}`);
+  assert(Math.abs(Number(summaryAll.totalCost) - 15.9288) < 0.000001,
+    'All-time cost is 15.9288',
+    `totalCost: $${summaryAll.totalCost}`);
 
   // Cleanup
   await clearAllData(userId);
@@ -129,4 +147,3 @@ run().catch(err => {
   console.error('Fatal error during test:', err);
   process.exit(1);
 });
-

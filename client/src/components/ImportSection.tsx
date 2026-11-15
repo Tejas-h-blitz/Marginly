@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { InlineSpinner } from './InlineSpinner.js';
 
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+
 interface ImportSectionProps {
   onUploadFile: (file: File) => void;
   onPasteSubmit: (content: string, format: 'csv' | 'json') => void;
@@ -129,6 +131,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
     const revenueIdx = headers.findIndex(h =>
       ['monthly_revenue_usd', 'revenue', 'revenue_usd', 'monthly_revenue', 'amount'].includes(h.replace(/[-_]/g, ''))
     );
+    const effectiveMonthIdx = headers.findIndex(h => h.replace(/[-_]/g, '') === 'effectivemonth');
     if (customerIdx === -1 || revenueIdx === -1) {
       return {
         valid: false,
@@ -141,8 +144,11 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
       const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
       const customerVal = cols[customerIdx];
       const revenueVal = cols[revenueIdx];
+      const effectiveMonth = effectiveMonthIdx >= 0 ? cols[effectiveMonthIdx] : '';
       if (!customerVal || !revenueVal || isNaN(Number(revenueVal.replace(/[$,]/g, '')))) {
         rejected.push(`Row ${i + 1}: invalid or missing customer/revenue (${lines[i]})`);
+      } else if (effectiveMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(effectiveMonth)) {
+        rejected.push(`Row ${i + 1}: effective_month must use YYYY-MM (${lines[i]})`);
       }
     }
     if (rejected.length > 0) {
@@ -157,6 +163,10 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
 
   const handleProcessFile = (file: File) => {
     setLocalError(null);
+    if (file.size > MAX_IMPORT_BYTES) {
+      setLocalError({ message: 'Usage files must be 10 MB or smaller.' });
+      return;
+    }
     const filename = file.name.toLowerCase();
     const isJson = filename.endsWith('.json');
     const isCsv = filename.endsWith('.csv') || file.type.includes('csv');
@@ -191,6 +201,10 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
 
   const handleProcessRevenueFile = (file: File) => {
     setLocalError(null);
+    if (file.size > MAX_IMPORT_BYTES) {
+      setLocalError({ message: 'Revenue files must be 10 MB or smaller.' });
+      return;
+    }
     const filename = file.name.toLowerCase();
     if (!filename.endsWith('.csv') && !file.type.includes('csv')) {
       setLocalError({ message: 'Only CSV files are supported for revenue import.' });
@@ -465,7 +479,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
               </div>
 
               <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm leading-normal">
-                Supports CSV &amp; JSON exports from OpenAI, Anthropic, Gemini, or custom gateways (up to 50MB)
+                Supports CSV &amp; JSON exports from OpenAI, Anthropic, Gemini, or custom gateways (up to 10 MB)
               </p>
 
               <div className="flex items-center gap-2 mt-2.5">
@@ -541,7 +555,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
               </svg>
               <p className="leading-relaxed text-[11px]">
                 <strong className="font-medium text-zinc-900 dark:text-zinc-200">Tenant-isolated parsing: </strong>
-                Only token counts and customer identifiers are ingested to compute unit economics. Prompt contents and completions are never uploaded or retained.
+                Upload only the fields needed for analysis. File contents are processed in memory; Marginly stores customer IDs, model names, token counts, timestamps, and revenue—not prompt or completion text.
               </p>
             </div>
           </div>
@@ -763,7 +777,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => downloadTemplate('marginly-revenue-template.csv', 'customer_id,monthly_revenue_usd\ncustomer_001,499.00\ncustomer_002,299.00\n')}
+                  onClick={() => downloadTemplate('marginly-revenue-template.csv', 'customer_id,effective_month,monthly_revenue_usd\ncustomer_001,,499.00\ncustomer_002,,299.00\n')}
                   className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 transition-colors"
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -788,6 +802,13 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
                     <span className="text-[9px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-sans">req</span>
                   </div>
                   <div className="text-zinc-500 dark:text-zinc-400 text-[10px] mt-0.5">Recurring contract value in USD</div>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-zinc-800/70 border border-zinc-200/70 dark:border-zinc-700/60">
+                  <div className="font-mono font-medium text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
+                    <span>effective_month</span>
+                    <span className="text-[9px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-sans">opt</span>
+                  </div>
+                  <div className="text-zinc-500 dark:text-zinc-400 text-[10px] mt-0.5">YYYY-MM; defaults to current month</div>
                 </div>
               </div>
             </div>

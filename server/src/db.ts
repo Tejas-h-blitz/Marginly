@@ -31,6 +31,7 @@ export interface IDatabase {
         modelName: string;
         inputTokens: number;
         outputTokens: number;
+        recordFingerprint?: string | null;
       }>
     }): Promise<{ count: number }>;
     findMany(args?: {
@@ -53,8 +54,6 @@ export interface IDatabase {
       modelName: string;
       displayName: string;
       provider: string;
-      costPer1kInput: number;
-      costPer1kOutput: number;
     }>>;
     upsert(args: {
       where: { modelName: string };
@@ -63,11 +62,13 @@ export interface IDatabase {
         modelName: string;
         displayName: string;
         provider: string;
-        costPer1kInput: number;
-        costPer1kOutput: number;
       };
     }): Promise<unknown>;
   };
+  $queryRaw<T extends object>(
+    query: string,
+    ...values: Array<string | number | Date | null>
+  ): Promise<T[]>;
   $disconnect(): Promise<void>;
   $transaction<T>(fn: (tx: IDatabase) => Promise<T>): Promise<T>;
 }
@@ -80,6 +81,99 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 export const prisma = new PrismaClient();
+
+function createTransactionDatabase(transaction: Prisma.TransactionClient): IDatabase {
+  const transactionDb: IDatabase = {
+    isPrisma: true,
+    customer: {
+      async upsert(args) {
+        return transaction.customer.upsert({
+          where: { userId_customerId: args.where.userId_customerId },
+          update: args.update,
+          create: args.create
+        });
+      },
+      async findMany(args) {
+        const customers = await transaction.customer.findMany({
+          where: args.where,
+          select: { customerId: true, monthlyRevenueUsd: true }
+        });
+        return customers.map(customer => ({
+          customerId: customer.customerId,
+          monthlyRevenueUsd: customer.monthlyRevenueUsd?.toString() ?? null
+        }));
+      },
+      async updateMany(args) {
+        return transaction.customer.updateMany({
+          where: args.where,
+          data: {
+            monthlyRevenueUsd: args.data.monthlyRevenueUsd === null
+              ? null
+              : new Prisma.Decimal(args.data.monthlyRevenueUsd)
+          }
+        });
+      },
+      async deleteMany(args) {
+        return transaction.customer.deleteMany({
+          where: args?.where?.userId ? { userId: args.where.userId } : undefined
+        });
+      }
+    },
+    usageRecord: {
+      async createMany(args) {
+        return transaction.usageRecord.createMany({ data: args.data });
+      },
+      async findMany(args) {
+        const rows = await transaction.usageRecord.findMany({
+          where: args?.where?.userId
+            ? {
+                userId: args.where.userId,
+                ...(args.where.timestamp && args.where.timestamp !== null
+                  ? { timestamp: args.where.timestamp }
+                  : {})
+              }
+            : undefined
+        });
+        return rows.map(record => ({
+          customerId: record.customerId,
+          modelName: record.modelName,
+          inputTokens: record.inputTokens,
+          outputTokens: record.outputTokens,
+          timestamp: record.timestamp
+        }));
+      },
+      async deleteMany(args) {
+        return transaction.usageRecord.deleteMany({
+          where: args?.where?.userId ? { userId: args.where.userId } : undefined
+        });
+      }
+    },
+    modelPricing: {
+      async findMany() {
+        return transaction.modelPricing.findMany({
+          select: { id: true, modelName: true, displayName: true, provider: true }
+        });
+      },
+      async upsert(args) {
+        return transaction.modelPricing.upsert({
+          where: args.where,
+          update: args.update,
+          create: args.create
+        });
+      }
+    },
+    async $queryRaw<T extends object>(query: string, ...values: Array<string | number | Date | null>) {
+      return transaction.$queryRawUnsafe<T[]>(query, ...values);
+    },
+    async $disconnect() {
+      return undefined;
+    },
+    async $transaction<T>(fn: (tx: IDatabase) => Promise<T>) {
+      return fn(transactionDb);
+    }
+  };
+  return transactionDb;
+}
 
 let pgliteInstance: PGlite | null = null;
 let usePrisma = true;
@@ -106,7 +200,12 @@ function isHostPortReachable(host: string, port: number, timeoutMs = 250): Promi
 
 async function getPglite(): Promise<PGlite> {
   if (!pgliteInstance) {
-    const dbDir = path.resolve(__dirname, '../../dev-postgres-data');
+    const testDbDir = process.env.NODE_ENV === 'test'
+      ? process.env.MARGINLY_TEST_PGLITE_DIR
+      : undefined;
+    const dbDir = testDbDir
+      ? path.resolve(testDbDir)
+      : path.resolve(__dirname, '../../dev-postgres-data');
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
@@ -169,6 +268,21 @@ async function getPglite(): Promise<PGlite> {
       try {
         await pgliteInstance.exec(fs.readFileSync(monthlyRevenueMigration, 'utf-8'));
       } catch { }
+    }
+
+    const priceVersionsMigration = path.resolve(__dirname, '../prisma/migrations/20261114000000_price_versions/migration.sql');
+    if (fs.existsSync(priceVersionsMigration)) {
+      await pgliteInstance.exec(fs.readFileSync(priceVersionsMigration, 'utf-8'));
+    }
+
+    const importHistoryMigration = path.resolve(__dirname, '../prisma/migrations/20261115000000_usage_import_history/migration.sql');
+    if (fs.existsSync(importHistoryMigration)) {
+      await pgliteInstance.exec(fs.readFileSync(importHistoryMigration, 'utf-8'));
+    }
+
+    const revenueVersionsMigration = path.resolve(__dirname, '../prisma/migrations/20261116000000_revenue_versions/migration.sql');
+    if (fs.existsSync(revenueVersionsMigration)) {
+      await pgliteInstance.exec(fs.readFileSync(revenueVersionsMigration, 'utf-8'));
     }
 
     // Ensure timestamp columns use TIMESTAMPTZ(3) in UTC
@@ -340,8 +454,8 @@ export const db: IDatabase = {
         await pg.query(`
           INSERT INTO usage_records (
             id, user_id, customer_id, timestamp, model_name,
-            input_tokens, output_tokens
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7);
+            input_tokens, output_tokens, record_fingerprint
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
         `, [
           id,
           userId,
@@ -349,7 +463,8 @@ export const db: IDatabase = {
           r.timestamp ? r.timestamp.toISOString() : null,
           r.modelName,
           r.inputTokens,
-          r.outputTokens
+          r.outputTokens,
+          r.recordFingerprint ?? null
         ]);
       }
       return { count: args.data.length };
@@ -418,7 +533,9 @@ export const db: IDatabase = {
   modelPricing: {
     async findMany() {
       if (usePrisma) {
-        return (prisma as any).modelPricing.findMany();
+        return prisma.modelPricing.findMany({
+          select: { id: true, modelName: true, displayName: true, provider: true }
+        });
       }
       const pg = await getPglite();
       const res = await pg.query<{
@@ -426,45 +543,49 @@ export const db: IDatabase = {
         model_name: string;
         display_name: string;
         provider: string;
-        cost_per_1k_input: number;
-        cost_per_1k_output: number;
-      }>('SELECT id, model_name, display_name, provider, cost_per_1k_input, cost_per_1k_output FROM model_pricing;');
+      }>('SELECT id, model_name, display_name, provider FROM model_pricing;');
 
       return res.rows.map(r => ({
         id: r.id,
         modelName: r.model_name,
         displayName: r.display_name,
-        provider: r.provider,
-        costPer1kInput: Number(r.cost_per_1k_input),
-        costPer1kOutput: Number(r.cost_per_1k_output)
+        provider: r.provider
       }));
     },
 
     async upsert(args) {
       if (usePrisma) {
-        return (prisma as any).modelPricing.upsert(args);
+        return prisma.modelPricing.upsert(args);
       }
       const pg = await getPglite();
       const id = crypto.randomUUID();
       await pg.query(`
-        INSERT INTO model_pricing (id, model_name, display_name, provider, cost_per_1k_input, cost_per_1k_output, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        INSERT INTO model_pricing (id, model_name, display_name, provider, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
         ON CONFLICT (model_name) DO UPDATE SET
           display_name = EXCLUDED.display_name,
           provider = EXCLUDED.provider,
-          cost_per_1k_input = EXCLUDED.cost_per_1k_input,
-          cost_per_1k_output = EXCLUDED.cost_per_1k_output,
           updated_at = NOW();
       `, [
         id,
         args.create.modelName,
         args.create.displayName,
-        args.create.provider,
-        args.create.costPer1kInput,
-        args.create.costPer1kOutput
+        args.create.provider
       ]);
       return args.create;
     }
+  },
+
+  async $queryRaw<T extends object>(
+    query: string,
+    ...values: Array<string | number | Date | null>
+  ): Promise<T[]> {
+    if (usePrisma) {
+      return prisma.$queryRawUnsafe<T[]>(query, ...values);
+    }
+    const pg = await getPglite();
+    const result = await pg.query<T>(query, values);
+    return result.rows;
   },
 
   async $disconnect() {
@@ -479,9 +600,18 @@ export const db: IDatabase = {
 
   async $transaction<T>(fn: (tx: IDatabase) => Promise<T>): Promise<T> {
     if (usePrisma) {
-      return (prisma as any).$transaction(async () => fn(db));
+      return prisma.$transaction(transaction => fn(createTransactionDatabase(transaction)));
     }
-    return fn(db);
+    const pg = await getPglite();
+    await pg.exec('BEGIN;');
+    try {
+      const result = await fn(db);
+      await pg.exec('COMMIT;');
+      return result;
+    } catch (error) {
+      await pg.exec('ROLLBACK;');
+      throw error;
+    }
   }
 };
 

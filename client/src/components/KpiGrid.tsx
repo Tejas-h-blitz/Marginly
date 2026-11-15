@@ -14,9 +14,17 @@ interface MetricCardProps {
   detail: string;
   tone?: 'default' | 'positive' | 'negative';
   icon?: React.ReactNode;
+  valueClassName?: string;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({ label, value, detail, tone = 'default', icon }) => {
+const MetricCard: React.FC<MetricCardProps> = ({
+  label,
+  value,
+  detail,
+  tone = 'default',
+  icon,
+  valueClassName = 'text-2xl'
+}) => {
   const { onMouseMove } = useCardSpotlight();
   const animatedValue = useCountUp(value);
   return (
@@ -30,7 +38,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ label, value, detail, tone = 'd
           : 'border-zinc-200/90 dark:border-zinc-800/80'
       }`}
     >
-      <div>
+      <div className="min-w-0">
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
             {label}
@@ -47,7 +55,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ label, value, detail, tone = 'd
             </div>
           )}
         </div>
-        <div className={`text-2xl font-bold font-mono tabular-nums tracking-tight ${
+        <div className={`${valueClassName} min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold font-mono tabular-nums tracking-tight ${
           tone === 'negative'
             ? 'text-rose-700 dark:text-rose-400'
             : 'text-zinc-950 dark:text-zinc-50'
@@ -77,6 +85,20 @@ const SkeletonCard: React.FC = () => (
 
 export const KpiGrid: React.FC<KpiGridProps> = ({ summary, loading = false }) => {
   const monthView = summary.month !== 'all';
+  const topCustomerId = summary.topCustomer?.customerId ?? '—';
+  const topCustomerValueClass = topCustomerId.length <= 12
+    ? 'text-2xl'
+    : topCustomerId.length <= 15
+      ? 'text-xl'
+      : topCustomerId.length <= 18
+        ? 'text-lg'
+        : topCustomerId.length <= 21
+          ? 'text-base'
+          : topCustomerId.length <= 26
+            ? 'text-sm'
+            : topCustomerId.length <= 32
+              ? 'text-xs'
+              : 'text-[11px]';
 
   if (loading) {
     return (
@@ -164,7 +186,8 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ summary, loading = false }) =>
       />
       <MetricCard
         label="Top Customer"
-        value={summary.topCustomer?.customerId ?? '—'}
+        value={topCustomerId}
+        valueClassName={topCustomerValueClass}
         detail={summary.topCustomer ? `$${formatFixedUsd(summary.topCustomer.cost, 4)} total spend` : 'No accounts ingested'}
         icon={
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

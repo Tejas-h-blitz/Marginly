@@ -8,6 +8,7 @@ import { AppNavbar } from './components/app/AppNavbar.js';
 import { ConcentrationBanner } from './components/app/ConcentrationBanner.js';
 import { DataQualityStrip } from './components/app/DataQualityStrip.js';
 import { ImportDrawer } from './components/app/ImportDrawer.js';
+import { CustomerDetailModal } from './components/app/CustomerDetailModal.js';
 import { KpiGrid } from './components/KpiGrid.js';
 import { CostChart } from './components/CostChart.js';
 import { CustomerTable } from './components/CustomerTable.js';
@@ -19,7 +20,10 @@ import {
   UsageSummary,
   ModelPricingItem,
   PricingResponse,
-  AlertNotification
+  AlertNotification,
+  PriceVersionItem,
+  ImportHistoryItem,
+  CustomerDetail
 } from './types/index.js';
 
 const INITIAL_SUMMARY: UsageSummary = {
@@ -54,6 +58,15 @@ function MainAppContent() {
   const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
   const [customers, setCustomers] = useState<CustomerBreakdown[]>([]);
   const [pricing, setPricing] = useState<Record<string, ModelPricingItem> | null>(null);
+  const [upcomingRates, setUpcomingRates] = useState<PriceVersionItem[]>([]);
+  const [customRates, setCustomRates] = useState<PriceVersionItem[]>([]);
+  const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
+  const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
+  const [customerDetailError, setCustomerDetailError] = useState<string | null>(null);
+  const [mergingCustomer, setMergingCustomer] = useState(false);
+  const [prefilledRateModel, setPrefilledRateModel] = useState('');
   const [loading, setLoading] = useState<boolean>(false);
   const [exporting, setExporting] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -121,11 +134,134 @@ function MainAppContent() {
       if (res.ok) {
         const data: PricingResponse = await res.json();
         setPricing(data.models);
+        setUpcomingRates(data.upcoming);
+        setCustomRates(data.custom);
       }
     } catch (err) {
       console.error('Failed to load pricing:', err);
     }
   }, [getAuthHeaders, isAuthenticated]);
+
+  const loadImportHistory = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/import-history', { headers: authHeaders, credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load import history.');
+      setImportHistory(await res.json());
+    } catch (err) {
+      console.error('Failed to load import history:', err);
+      showAlert(err instanceof Error ? err.message : 'Failed to load import history.', 'error');
+    }
+  }, [getAuthHeaders, isAuthenticated]);
+
+  useEffect(() => {
+    if (isImportOpen) void loadImportHistory();
+  }, [isImportOpen, loadImportHistory]);
+
+  const loadCustomerDetail = useCallback(async (
+    customerId: string,
+    month: string,
+    signal: AbortSignal
+  ) => {
+    setCustomerDetailLoading(true);
+    setCustomerDetailError(null);
+    setCustomerDetail(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const query = month ? `?month=${encodeURIComponent(month)}` : '';
+      const response = await fetch(
+        `/api/customers/${encodeURIComponent(customerId)}/detail${query}`,
+        { headers: authHeaders, credentials: 'include', signal }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to load customer details.');
+      setCustomerDetail(data);
+    } catch (err) {
+      if (signal.aborted) return;
+      const message = err instanceof Error ? err.message : 'Failed to load customer details.';
+      setCustomerDetailError(message);
+    } finally {
+      if (!signal.aborted) setCustomerDetailLoading(false);
+    }
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    if (!selectedCustomerId) return;
+    const controller = new AbortController();
+    void loadCustomerDetail(selectedCustomerId, selectedMonth ?? summary.month, controller.signal);
+    return () => controller.abort();
+  }, [loadCustomerDetail, selectedCustomerId, selectedMonth, summary.month]);
+
+  const handleMergeCustomer = async (sourceCustomerId: string, targetCustomerId: string): Promise<boolean> => {
+    setMergingCustomer(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch('/api/customers/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        credentials: 'include',
+        body: JSON.stringify({
+          source_customer_id: sourceCustomerId,
+          target_customer_id: targetCustomerId
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to merge customers.');
+      showAlert(data.message, 'success');
+      setSelectedCustomerId(null);
+      await loadData();
+      return true;
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to merge customers.', 'error');
+      return false;
+    } finally {
+      setMergingCustomer(false);
+    }
+  };
+
+  const handleSaveCustomRate = async (
+    rate: { model_name: string; input_per_million: string; output_per_million: string; effective_from: string },
+    id?: string
+  ): Promise<boolean> => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/custom-rates', {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        credentials: 'include',
+        body: JSON.stringify(id ? { ...rate, id } : rate)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save custom rate.');
+      showAlert(`Custom rate saved for ${data.rate.modelName}.`, 'success');
+      await Promise.all([loadPricing(), loadData()]);
+      return true;
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to save custom rate.', 'error');
+      return false;
+    }
+  };
+
+  const handleDeleteCustomRate = async (id: string): Promise<boolean> => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/custom-rates', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        credentials: 'include',
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete custom rate.');
+      showAlert('Custom rate deleted.', 'success');
+      await Promise.all([loadPricing(), loadData()]);
+      return true;
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Failed to delete custom rate.', 'error');
+      return false;
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -161,6 +297,7 @@ function MainAppContent() {
 
       showAlert(data.message, 'success');
       await loadData();
+      await loadImportHistory();
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Error loading sample data', 'error');
     } finally {
@@ -192,18 +329,19 @@ function MainAppContent() {
     }
   };
 
-  const handleSaveRevenue = async (customerId: string, value: string | null): Promise<boolean> => {
+  const handleSaveRevenue = async (customerId: string, value: string | null, month: string): Promise<boolean> => {
     try {
+      const effectiveMonth = month === 'all' ? new Date().toISOString().slice(0, 7) : month;
       const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/customers/${encodeURIComponent(customerId)}/revenue`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         credentials: 'include',
-        body: JSON.stringify({ monthly_revenue_usd: value })
+        body: JSON.stringify({ monthly_revenue_usd: value, effective_month: effectiveMonth })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save monthly revenue.');
-      showAlert(`Monthly revenue saved for ${customerId}.`, 'success');
+      showAlert(`Monthly revenue saved for ${customerId} for ${effectiveMonth}.`, 'success');
       await loadData();
       return true;
     } catch (err) {
@@ -238,7 +376,7 @@ function MainAppContent() {
   };
 
   const handleClearData = async () => {
-    if (!window.confirm('Are you sure you want to clear all usage data?')) return;
+    if (!window.confirm('Permanently remove your usage records, customer revenue, import history, and custom pricing rates? This cannot be undone.')) return;
     setClearing(true);
     setLoading(true);
     try {
@@ -251,7 +389,7 @@ function MainAppContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to clear usage data.');
       showAlert(data.message, 'success');
-      await loadData();
+      await Promise.all([loadData(), loadPricing(), loadImportHistory()]);
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Error clearing data', 'error');
     } finally {
@@ -261,6 +399,10 @@ function MainAppContent() {
   };
 
   const handleUploadFile = async (file: File): Promise<boolean> => {
+    if (file.size > 10 * 1024 * 1024) {
+      showAlert('Files must be 10 MB or smaller.', 'error');
+      return false;
+    }
     setLoading(true);
     showAlert(`Uploading '${file.name}'...`, 'info');
     const formData = new FormData();
@@ -277,13 +419,9 @@ function MainAppContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
 
-      const unknownModels = (data.summary?.unpricedModels ?? [])
-        .map((model: { modelName: string }) => model.modelName);
-      const pricingWarning = unknownModels.length
-        ? ` Unpriced models still affecting this account: ${unknownModels.join(', ')}.`
-        : '';
-      showAlert(`${data.message}${pricingWarning}`, 'success');
+      showAlert(data.message, 'success');
       await loadData();
+      await loadImportHistory();
       return true;
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to upload file', 'error');
@@ -294,6 +432,10 @@ function MainAppContent() {
   };
 
   const handlePasteSubmit = async (content: string, format: 'csv' | 'json'): Promise<boolean> => {
+    if (new TextEncoder().encode(content).byteLength > 10 * 1024 * 1024) {
+      showAlert('Pasted usage data must be 10 MB or smaller.', 'error');
+      return false;
+    }
     setLoading(true);
     showAlert('Processing pasted data...', 'info');
 
@@ -311,13 +453,9 @@ function MainAppContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Processing failed');
 
-      const unknownModels = (data.summary?.unpricedModels ?? [])
-        .map((model: { modelName: string }) => model.modelName);
-      const pricingWarning = unknownModels.length
-        ? ` Unpriced models still affecting this account: ${unknownModels.join(', ')}.`
-        : '';
-      showAlert(`${data.message}${pricingWarning}`, 'success');
+      showAlert(data.message, 'success');
       await loadData();
+      await loadImportHistory();
       return true;
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to process pasted data', 'error');
@@ -358,7 +496,10 @@ function MainAppContent() {
         <div className="app-canvas min-h-screen text-zinc-900 dark:text-zinc-100 flex flex-col font-sans transition-colors">
           {/* Top Application Navbar */}
           <AppNavbar
-            onOpenPricing={() => setIsPricingOpen(true)}
+            onOpenPricing={() => {
+              setPrefilledRateModel('');
+              setIsPricingOpen(true);
+            }}
             onClearData={handleClearData}
             onBackToLanding={() => setCurrentView('landing')}
             totalCustomers={summary.totalCustomers}
@@ -445,6 +586,10 @@ function MainAppContent() {
               untimestampedRequests={summary.untimestampedRequests}
               unpricedModels={summary.unpricedModels}
               month={summary.month}
+              onAddRate={modelName => {
+                setPrefilledRateModel(modelName);
+                setIsPricingOpen(true);
+              }}
             />
 
             {/* Pareto 80/20 Concentration Risk Alert */}
@@ -464,6 +609,7 @@ function MainAppContent() {
               customers={customers}
               month={summary.month}
               onSaveRevenue={handleSaveRevenue}
+              onViewCustomer={setSelectedCustomerId}
               onImport={() => setIsImportOpen(true)}
               onCopyError={message => showAlert(message, 'error')}
               loading={loading}
@@ -479,6 +625,7 @@ function MainAppContent() {
             onLoadSample={handleLoadSample}
             onImportRevenue={handleRevenueImport}
             loading={loading}
+            importHistory={importHistory}
           />
 
           {/* Model Pricing Reference Modal */}
@@ -486,6 +633,26 @@ function MainAppContent() {
             isOpen={isPricingOpen}
             onClose={() => setIsPricingOpen(false)}
             pricing={pricing}
+            upcoming={upcomingRates}
+            customRates={customRates}
+            initialModelName={prefilledRateModel}
+            onSaveCustomRate={handleSaveCustomRate}
+            onDeleteCustomRate={handleDeleteCustomRate}
+          />
+
+          <CustomerDetailModal
+            customerId={selectedCustomerId}
+            detail={customerDetail}
+            customers={customers}
+            loading={customerDetailLoading}
+            error={customerDetailError}
+            merging={mergingCustomer}
+            onClose={() => {
+              setSelectedCustomerId(null);
+              setCustomerDetail(null);
+              setCustomerDetailError(null);
+            }}
+            onMerge={handleMergeCustomer}
           />
         </div>
       )}

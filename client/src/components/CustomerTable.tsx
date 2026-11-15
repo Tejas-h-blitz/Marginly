@@ -5,7 +5,8 @@ import { compareMoney, formatFixedUsd, formatPercent } from '../money.js';
 interface CustomerTableProps {
   customers: CustomerBreakdown[];
   month: string;
-  onSaveRevenue: (customerId: string, value: string | null) => Promise<boolean>;
+  onSaveRevenue: (customerId: string, value: string | null, month: string) => Promise<boolean>;
+  onViewCustomer: (customerId: string) => void;
   onImport: () => void;
   onCopyError: (message: string) => void;
   loading?: boolean;
@@ -18,6 +19,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
   customers,
   month,
   onSaveRevenue,
+  onViewCustomer,
   onImport,
   onCopyError,
   loading = false
@@ -95,7 +97,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
     setSavingCustomerId(customerId);
     setErrorCustomerId(null);
     const valueToSave = draftRevenue.trim() ? draftRevenue.trim() : null;
-    const success = await onSaveRevenue(customerId, valueToSave);
+    const success = await onSaveRevenue(customerId, valueToSave, month);
     setSavingCustomerId(null);
     if (success) {
       setEditingCustomerId(null);
@@ -329,6 +331,13 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                           </svg>
                         )}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => onViewCustomer(c.customerId)}
+                        className="shrink-0 rounded px-1.5 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        Details
+                      </button>
                     </div>
 
                     {/* Total Cost: Fixed 4 decimals */}
@@ -372,7 +381,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                   {showMonthlyMetrics && (
                     <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between gap-3 text-xs">
                       <div>
-                        <span className="text-zinc-500 block text-xs">Monthly Revenue (Applies to all months)</span>
+                        <span className="text-zinc-500 block text-xs">Revenue · {month}</span>
                         {isEditing ? (
                           <div className="flex items-center gap-1.5 mt-1">
                             <span className="font-mono text-zinc-500">$</span>
@@ -412,7 +421,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                             <button
                               type="button"
                               onClick={() => startEditing(c.customerId, c.monthlyRevenueUsd)}
-                              title="Edit monthly revenue (applies to every month)"
+                              title={`Edit revenue for ${month}`}
                               className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                             >
                               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -485,9 +494,9 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                   <>
                     <th className="py-2.5 px-3.5">
                       <div className="flex flex-col">
-                        <span>Monthly Revenue</span>
-                        <span className="text-zinc-500 dark:text-zinc-400 font-sans text-xs normal-case font-normal" title="Applies to every month">
-                          (Applies to all months)
+                        <span>Revenue · {month}</span>
+                        <span className="text-zinc-500 dark:text-zinc-400 font-sans text-xs normal-case font-normal">
+                          Effective from this month
                         </span>
                       </div>
                     </th>
@@ -559,6 +568,14 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                               </svg>
                             )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onViewCustomer(c.customerId)}
+                            title={`View details for ${c.customerId}`}
+                            className="rounded px-1.5 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          >
+                            Details
                           </button>
                         </div>
                       </td>
@@ -662,7 +679,7 @@ export const CustomerTable: React.FC<CustomerTableProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => startEditing(c.customerId, c.monthlyRevenueUsd)}
-                                  title="Edit monthly revenue (applies to every month)"
+                                  title={`Edit revenue for ${month}`}
                                   aria-label={`Edit monthly revenue for ${c.customerId}`}
                                   className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                                 >

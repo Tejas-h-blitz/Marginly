@@ -30,6 +30,7 @@ model UsageRecord {
   modelName    String    @map("model_name")
   inputTokens  Int       @map("input_tokens")
   outputTokens Int       @map("output_tokens")
+  recordFingerprint String? @map("record_fingerprint")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([userId])
@@ -39,14 +40,56 @@ model UsageRecord {
 }
 
 model ModelPricing {
-  id              String   @id @default(uuid())
-  modelName       String   @unique @map("model_name")
-  displayName     String   @map("display_name")
-  provider        String
-  costPer1kInput  Float    @map("cost_per_1k_input")
-  costPer1kOutput Float    @map("cost_per_1k_output")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                     String   @id @default(uuid())
+  modelName              String   @unique @map("model_name")
+  displayName            String   @map("display_name")
+  provider               String
+  legacyCostPer1kInput   Float?   @map("cost_per_1k_input") @ignore
+  legacyCostPer1kOutput  Float?   @map("cost_per_1k_output") @ignore
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
   @@map("model_pricing")
+}
+
+model PriceVersion {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  modelName       String   @map("model_name")
+  costPer1kInput  Decimal  @map("cost_per_1k_input") @db.Decimal(20, 10)
+  costPer1kOutput Decimal  @map("cost_per_1k_output") @db.Decimal(20, 10)
+  effectiveFrom  DateTime @map("effective_from") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([userId, modelName, effectiveFrom])
+  @@index([modelName, effectiveFrom])
+  @@map("price_versions")
+}
+
+model ImportBatch {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  sourceName      String   @map("source_name")
+  sourceType      String   @map("source_type")
+  totalRecords    Int      @map("total_records")
+  insertedRecords Int      @map("inserted_records")
+  duplicateRecords Int     @map("duplicate_records")
+  unpricedRecords Int      @map("unpriced_records")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@map("import_batches")
+}
+
+model RevenueVersion {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  customerId        String   @map("customer_id")
+  monthlyRevenueUsd Decimal? @map("monthly_revenue_usd") @db.Decimal(14, 2)
+  effectiveMonth   DateTime @map("effective_month") @db.Date
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([userId, customerId, effectiveMonth])
+  @@index([userId, effectiveMonth])
+  @@map("revenue_versions")
 }

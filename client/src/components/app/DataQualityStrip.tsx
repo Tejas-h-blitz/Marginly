@@ -5,12 +5,14 @@ interface DataQualityStripProps {
   untimestampedRequests: number;
   unpricedModels: UsageSummary['unpricedModels'];
   month: string;
+  onAddRate?: (modelName: string) => void;
 }
 
 export const DataQualityStrip: React.FC<DataQualityStripProps> = ({
   untimestampedRequests,
   unpricedModels,
-  month
+  month,
+  onAddRate
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -90,9 +92,20 @@ export const DataQualityStrip: React.FC<DataQualityStripProps> = ({
                     <code className="font-mono text-xs text-zinc-900 dark:text-zinc-100 break-all font-semibold">
                       {model.modelName}
                     </code>
-                    <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-300 text-xs shrink-0">
-                      {model.requestCount.toLocaleString('en-US')} request{model.requestCount === 1 ? '' : 's'}
-                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-300 text-xs">
+                        {model.requestCount.toLocaleString('en-US')} request{model.requestCount === 1 ? '' : 's'}
+                      </span>
+                      {onAddRate && (
+                        <button
+                          type="button"
+                          onClick={() => onAddRate(model.modelName)}
+                          className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          Add rate
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -114,4 +127,3 @@ export const DataQualityStrip: React.FC<DataQualityStripProps> = ({
     </section>
   );
 };
-

@@ -14,7 +14,7 @@
  *    - Margin and blended margin % calculation
  *    - Raw text usage ingestion (CSV & JSON format)
  *    - Revenue CSV bulk import
- *    - 12-column CSV report export validation
+ *    - CSV report export and cost-basis validation
  *    - Post-test data teardown / reset
  * 4. Comprehensive UI Verification Matrix & Component Audit Checklist
  *
@@ -181,6 +181,12 @@ async function runE2eSuite() {
     { method: 'GET', path: '/api/summary' },
     { method: 'GET', path: '/api/customers' },
     { method: 'GET', path: '/api/pricing' },
+    { method: 'GET', path: '/api/import-history' },
+    { method: 'POST', path: '/api/custom-rates', body: {} },
+    { method: 'PUT', path: '/api/custom-rates', body: {} },
+    { method: 'DELETE', path: '/api/custom-rates', body: {} },
+    { method: 'POST', path: '/api/upload' },
+    { method: 'POST', path: '/api/revenue/import' },
     { method: 'POST', path: '/api/load-sample' },
     { method: 'POST', path: '/api/clear' },
     { method: 'POST', path: '/api/paste', body: { content: '', format: 'csv' } },
@@ -415,10 +421,13 @@ async function runE2eSuite() {
   if (topCustomerId) {
     try {
       const revenueToSet = '500.00';
+      const monthsRes = await fetch(`${BASE_URL}/api/summary?month=all`, { headers: AUTH_HEADERS });
+      const availableMonths = (await monthsRes.json()).availableMonths || [];
+      const testMonth = availableMonths[0] || new Date().toISOString().slice(0, 7);
       const putRes = await fetch(`${BASE_URL}/api/customers/${encodeURIComponent(topCustomerId)}/revenue`, {
         method: 'PUT',
         headers: AUTH_HEADERS,
-        body: JSON.stringify({ monthly_revenue_usd: revenueToSet })
+        body: JSON.stringify({ monthly_revenue_usd: revenueToSet, effective_month: testMonth })
       });
       const putData = await putRes.json();
       if (putRes.ok) {
@@ -428,8 +437,6 @@ async function runE2eSuite() {
       }
 
       // Test month view margin derivation
-      const summaryRes = await fetch(`${BASE_URL}/api/summary?month=all`, { headers: AUTH_HEADERS });
-      const availableMonths = (await summaryRes.json()).availableMonths || [];
       if (availableMonths.length > 0) {
         const testMonth = availableMonths[0];
         const monthRes = await fetch(`${BASE_URL}/api/summary?month=${testMonth}`, { headers: AUTH_HEADERS });
@@ -520,7 +527,7 @@ async function runE2eSuite() {
     logFail('Bulk revenue import error', err.message);
   }
 
-  // Step 3.10: 12-Column CSV Report Export
+  // Step 3.10: CSV Report Export
   try {
     const exportRes = await fetch(`${BASE_URL}/api/export?month=all`, { headers: AUTH_HEADERS });
     if (exportRes.ok) {
@@ -535,6 +542,7 @@ async function runE2eSuite() {
         'total_tokens',
         'monthly_revenue_usd',
         'total_cost_usd',
+        'cost_basis',
         'margin_usd',
         'margin_percent',
         'avg_cost_per_request_usd',
@@ -542,7 +550,7 @@ async function runE2eSuite() {
       ];
       const allPresent = requiredColumns.every(col => firstLine.includes(col));
       if (allPresent) {
-        logPass('GET /api/export generates CSV containing all 12 spec-mandated columns');
+        logPass('GET /api/export generates CSV containing all required columns, including cost basis');
       } else {
         logFail('CSV export header missing required columns', firstLine);
       }
@@ -666,4 +674,3 @@ runE2eSuite().catch(err => {
   console.error('Fatal test runner error:', err);
   process.exit(1);
 });
-

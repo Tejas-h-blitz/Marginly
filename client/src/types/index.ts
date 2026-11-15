@@ -14,6 +14,36 @@ export interface CustomerBreakdown {
   unprofitable: boolean;
 }
 
+export interface CustomerDetail {
+  customerId: string;
+  month: string;
+  totalRequests: number;
+  pricedRequests: number;
+  unpricedRequests: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCost: string;
+  models: Array<{
+    modelName: string;
+    requests: number;
+    pricedRequests: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCost: string;
+  }>;
+  recentUsage: Array<{
+    timestamp: string | null;
+    modelName: string;
+    inputTokens: number;
+    outputTokens: number;
+    cost: string | null;
+  }>;
+  revenueHistory: Array<{
+    effectiveMonth: string;
+    monthlyRevenueUsd: string | null;
+  }>;
+}
+
 export interface UsageSummary {
   month: string;
   availableMonths: string[];
@@ -51,6 +81,27 @@ export interface ModelPricingItem {
 export interface PricingResponse {
   description: string;
   models: Record<string, ModelPricingItem>;
+  upcoming: PriceVersionItem[];
+  custom: PriceVersionItem[];
+}
+
+export interface PriceVersionItem {
+  id: string;
+  modelName: string;
+  costPer1kInput: number;
+  costPer1kOutput: number;
+  effectiveFrom: string;
+}
+
+export interface ImportHistoryItem {
+  id: string;
+  sourceName: string;
+  sourceType: 'upload' | 'paste' | 'sample';
+  totalRecords: number;
+  insertedRecords: number;
+  duplicateRecords: number;
+  unpricedRecords: number;
+  createdAt: string;
 }
 
 export interface AlertNotification {

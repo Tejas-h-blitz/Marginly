@@ -100,7 +100,7 @@ The application includes sample data with **8 customer accounts** across mixed O
 Import usage logs via drag-and-drop or by pasting into the **Paste Raw Data** tab.
 
 ### CSV Format
-Must include these 5 header columns:
+The customer ID, model name, and input/output token fields are required. The timestamp is optional.
 
 ```csv
 customer_id,timestamp,model_name,input_tokens,output_tokens
@@ -124,11 +124,41 @@ cust_starter_dev,2026-09-22T10:00:00Z,gpt-4o-mini,3100,520
 
 ---
 
-## Model Pricing Matrix
+## Model Pricing
 
-Model rates are defined in USD **per 1,000 tokens** and stored in the PostgreSQL `model_pricing` table:
+The model catalog stores display/provider metadata; effective-dated rates are stored separately in `price_versions`. Global rates and account-specific overrides are resolved at query time from each request's token counts and timestamp.
 - **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4`, `gpt-3.5-turbo`, `o1`, `o1-mini`, `o3-mini`
 - **Anthropic**: `claude-3-7-sonnet`, `claude-3-5-sonnet`, `claude-sonnet-4`, `claude-3-5-haiku`, `claude-3-haiku`, `claude-3-opus`
 - Click **"Pricing Rates"** in the navbar to view active rates.
+- Account-specific model rates can be added, edited, and removed in the pricing dialog; the form accepts USD per million tokens and an optional effective date.
 
 Usage records with models that do not match an active pricing entry are marked unpriced, excluded from cost totals, and listed with request counts in a dashboard warning. Each import reports how many records were unpriced. Costs for priced records are recalculated from stored token counts and the current rates when usage data is queried.
+
+## Revenue, customer detail, and imports
+
+- Revenue values are versioned by effective month. Editing a selected month affects that month and later months until a subsequent version is entered; earlier months remain unchanged.
+- Import batches record source, counts, duplicates, unpriced records, and time. Re-imports are user-scoped and idempotent.
+- Customer details show model/request totals, recent usage, and revenue history. Merging customers is transactional: usage duplicates collapse, and the target customer's revenue wins same-month conflicts.
+- CSV/JSON usage files and pasted content are limited to 10 MiB and processed in memory. Marginly persists supported customer/model/token/timestamp fields, revenue versions, import metadata, and custom rates—not prompt or completion text. Do not include prompt contents or secrets in imports.
+- The dashboard clear action permanently removes the signed-in account's usage records, customer/revenue history, import history, and custom rates from the active database. It does not delete the Clerk account or guarantee removal of operational logs or backups.
+
+## Privacy and Terms drafts
+
+The landing-page footer links to factual Privacy and Terms drafts. They are explicitly marked **Draft — legal review required**. Before launch, the service operator must confirm hosting/database providers, processing locations, log and backup retention, jurisdiction, contact information, and any required legal terms.
+
+## Tests
+
+Run the production build and focused regression suites:
+
+```powershell
+npm run build
+$env:MARGINLY_TEST_PGLITE_DIR = "C:\path\to\an\isolated\database-copy"
+npm run test:security
+npm run test:pricing
+npm run test:imports
+npm run test:revenue
+npm run test:customers
+npm run test:stress
+```
+
+Database tests require `MARGINLY_TEST_PGLITE_DIR` to point to a disposable, isolated copy. Never point it to production or the active local database. The stress suite runs its 35 checks in UTC, America/Los_Angeles, Asia/Kolkata, and Pacific/Auckland.

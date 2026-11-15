@@ -14,6 +14,10 @@
     "start:test": "npm run start:test --prefix server",
     "test:e2e": "node test-e2e.mjs",
     "test:security": "node test-auth-security.mjs",
-    "test:stress": "node test-stress-utc.mjs"
+    "test:stress": "node test-stress-utc.mjs",
+    "test:pricing": "node test-pricing-versions.mjs",
+    "test:imports": "node test-import-safety.mjs",
+    "test:revenue": "node test-revenue-history.mjs",
+    "test:customers": "node test-customer-merge.mjs"
   }
 }

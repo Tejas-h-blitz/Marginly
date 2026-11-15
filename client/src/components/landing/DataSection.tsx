@@ -5,7 +5,9 @@ const STORED_FIELDS = [
   'Model names',
   'Input and output token counts',
   'Timestamps, when provided and valid',
-  'Monthly revenue, if you add it'
+  'Monthly revenue versions, if you add them',
+  'Import source and record-count history',
+  'Account-specific pricing rates'
 ];
 
 export const DataSection: React.FC = () => (
@@ -28,12 +30,12 @@ export const DataSection: React.FC = () => (
         <div className="rounded-xl border border-zinc-200/90 bg-white p-5 dark:border-zinc-800/80 dark:bg-[#121316]">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Not stored</h3>
           <p className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            Prompts and model responses are not stored as usage records. The importer saves customer identifiers, model names, token counts, and timestamps—not prompt or response text.
+            Marginly does not persist prompt or response text. Upload only the fields needed for analysis; file contents are processed in memory, while the supported usage fields, revenue, import metadata, and custom rates are retained.
           </p>
         </div>
       </div>
       <p className="md:col-start-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-        Clear removes your stored usage records and customer records from Marginly.
+        Clear permanently removes your usage, customer and revenue records, import history, and account-specific pricing rates.
       </p>
     </div>
   </section>

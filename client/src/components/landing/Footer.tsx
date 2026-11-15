@@ -3,9 +3,10 @@ import { BrandLogo } from '../BrandLogo.js';
 
 interface FooterProps {
   feedbackHref: string | null;
+  onOpenPolicy: (policy: 'privacy' | 'terms') => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ feedbackHref }) => (
+export const Footer: React.FC<FooterProps> = ({ feedbackHref, onOpenPolicy }) => (
   <footer className="border-t border-zinc-200/80 bg-white dark:border-zinc-800/80 dark:bg-[#0c0d0f] transition-colors">
     <div className="mx-auto max-w-6xl px-4 py-7 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -22,7 +23,21 @@ export const Footer: React.FC<FooterProps> = ({ feedbackHref }) => (
           </p>
         </div>
 
-        <div className="flex items-center gap-5 text-xs">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+          <button
+            type="button"
+            onClick={() => onOpenPolicy('privacy')}
+            className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+          >
+            Privacy
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenPolicy('terms')}
+            className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+          >
+            Terms
+          </button>
           {feedbackHref && (
             <a
               href={feedbackHref}

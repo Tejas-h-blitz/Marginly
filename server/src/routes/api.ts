@@ -7,25 +7,53 @@ import { getAuth } from '@clerk/express';
 import {
   parseCsv,
   parseJson,
-  processRawRecords,
-  saveRecords,
   getCustomersBreakdown,
   getOverallSummary,
+  getCustomerDetail,
+  mergeCustomerInto,
+  getImportHistory,
+  importUsageRecords,
+  UsageImportValidationError,
   clearAllData,
   importCustomerRevenue,
   updateCustomerRevenue
 } from '../services/usageService.js';
-import { getActivePricing } from '../services/pricingService.js';
+import {
+  createCustomRate,
+  deleteCustomRate,
+  getActivePricing,
+  PriceVersionConflictError,
+  PriceVersionInputError,
+  updateCustomRate
+} from '../services/pricingService.js';
 import { generateCustomerBreakdownCsv } from '../services/exportService.js';
 import { PastePayload } from '../types/index.js';
 import { parseMonthlyRevenue, toMoneyString, validateMonth } from '../services/money.js';
 
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 } // 25MB
+  limits: { fileSize: MAX_IMPORT_BYTES }
 });
 
 export const apiRouter = Router();
+
+const handleFileUpload = (req: Request, res: Response, next: (error?: unknown) => void): void => {
+  upload.single('file')(req, res, error => {
+    if (error instanceof multer.MulterError) {
+      const tooLarge = error.code === 'LIMIT_FILE_SIZE';
+      res.status(tooLarge ? 413 : 400).json({
+        error: tooLarge ? 'Files must be 10 MB or smaller.' : 'The uploaded file could not be processed.'
+      });
+      return;
+    }
+    if (error) {
+      next(error);
+      return;
+    }
+    next();
+  });
+};
 
 function getRequestedMonth(req: Request): string | undefined {
   return validateMonth(req.query.month);
@@ -137,23 +165,80 @@ apiRouter.get('/customers', async (req: Request, res: Response): Promise<void> =
   }
 });
 
+apiRouter.get('/customers/:customerId/detail', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const month = getRequestedMonth(req) ?? 'all';
+    const detail = await getCustomerDetail(res.locals.userId, req.params.customerId, month);
+    if (!detail) {
+      res.status(404).json({ error: 'Customer not found for this account.' });
+      return;
+    }
+    res.json(detail);
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Month must be')) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error('Error fetching customer details:', err);
+    res.status(500).json({ error: 'Failed to fetch customer details.' });
+  }
+});
+
+apiRouter.post('/customers/merge', async (req: Request, res: Response): Promise<void> => {
+  const sourceCustomerId = typeof req.body?.source_customer_id === 'string'
+    ? req.body.source_customer_id.trim()
+    : '';
+  const targetCustomerId = typeof req.body?.target_customer_id === 'string'
+    ? req.body.target_customer_id.trim()
+    : '';
+  try {
+    const result = await mergeCustomerInto(res.locals.userId, sourceCustomerId, targetCustomerId);
+    res.json({
+      success: true,
+      revenueConflictPolicy: 'target_wins',
+      message: `Merged ${sourceCustomerId} into ${targetCustomerId}. ${result.duplicateRequestsRemoved} duplicate usage records were removed; ${result.revenueConflicts} revenue-month conflicts kept the target value.`,
+      ...result
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to merge customers.';
+    const status = message.startsWith('Source or target customer') ? 404 : 400;
+    if (status === 400 && !message.startsWith('Both customer IDs') &&
+        !message.startsWith('Source and target')) {
+      console.error('Error merging customers:', err);
+      res.status(500).json({ error: 'Failed to merge customers.' });
+      return;
+    }
+    res.status(status).json({ error: message });
+  }
+});
+
 // PUT /api/customers/:customerId/revenue
 apiRouter.put('/customers/:customerId/revenue', async (req: Request, res: Response): Promise<void> => {
   try {
     const rawRevenue = req.body?.monthly_revenue_usd;
     const revenue = rawRevenue === null ? null : toMoneyString(parseMonthlyRevenue(rawRevenue));
-    await updateCustomerRevenue(res.locals.userId, req.params.customerId, revenue);
-    res.json({ success: true, customerId: req.params.customerId, monthlyRevenueUsd: revenue });
+    const rawMonth = req.body?.effective_month ?? req.query.month ?? new Date().toISOString().slice(0, 7);
+    const effectiveMonth = validateMonth(rawMonth);
+    if (!effectiveMonth || effectiveMonth === 'all') {
+      res.status(400).json({ error: 'Effective month must be a specific YYYY-MM month.' });
+      return;
+    }
+    await updateCustomerRevenue(res.locals.userId, req.params.customerId, effectiveMonth, revenue);
+    res.json({ success: true, customerId: req.params.customerId, effectiveMonth, monthlyRevenueUsd: revenue });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update monthly revenue.';
-    const status = message.startsWith('Monthly revenue') ? 400 : message.startsWith('Customer not found') ? 404 : 500;
+    const status = message.startsWith('Monthly revenue') ||
+      message.startsWith('Month must') ||
+      message.startsWith('Effective month')
+      ? 400
+      : message.startsWith('Customer not found') ? 404 : 500;
     if (status === 500) console.error('Error updating customer revenue:', err);
     res.status(status).json({ error: message });
   }
 });
 
 // POST /api/revenue/import
-apiRouter.post('/revenue/import', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+apiRouter.post('/revenue/import', handleFileUpload, async (req: Request, res: Response): Promise<void> => {
   try {
     if (!req.file || !req.file.originalname.toLowerCase().endsWith('.csv')) {
       res.status(400).json({ error: 'Upload a CSV file with customer_id and monthly_revenue_usd columns.' });
@@ -178,15 +263,24 @@ apiRouter.post('/revenue/import', upload.single('file'), async (req: Request, re
       return;
     }
 
-    const seenCustomerIds = new Set<string>();
+    const seenCustomerMonth = new Set<string>();
     const revenueRows = rows.map((row, index) => {
       const customerId = String(row.customer_id ?? '').trim();
       if (!customerId) throw new Error(`Row ${index + 2}: customer_id is required.`);
-      if (seenCustomerIds.has(customerId)) throw new Error(`Duplicate customer_id '${customerId}' in revenue CSV.`);
-      seenCustomerIds.add(customerId);
+      const rawMonth = String(row.effective_month ?? '').trim() || new Date().toISOString().slice(0, 7);
+      const effectiveMonth = validateMonth(rawMonth);
+      if (!effectiveMonth || effectiveMonth === 'all') {
+        throw new Error(`Row ${index + 2}: effective_month must be a specific YYYY-MM month.`);
+      }
+      const customerMonth = `${customerId}\u0000${effectiveMonth}`;
+      if (seenCustomerMonth.has(customerMonth)) {
+        throw new Error(`Duplicate customer_id '${customerId}' for ${effectiveMonth} in revenue CSV.`);
+      }
+      seenCustomerMonth.add(customerMonth);
       return {
         customerId,
-        monthlyRevenueUsd: toMoneyString(parseMonthlyRevenue(row.monthly_revenue_usd))
+        monthlyRevenueUsd: toMoneyString(parseMonthlyRevenue(row.monthly_revenue_usd)),
+        effectiveMonth
       };
     });
 
@@ -198,7 +292,8 @@ apiRouter.post('/revenue/import', upload.single('file'), async (req: Request, re
       ? 404
       : message.startsWith('Monthly revenue') ||
         message.startsWith('Row ') ||
-        message.startsWith('Duplicate customer_id')
+        message.startsWith('Duplicate customer_id') ||
+        message.startsWith('Month must')
         ? 400
         : 500;
     if (status === 500) console.error('Error importing customer revenue:', err);
@@ -209,10 +304,10 @@ apiRouter.post('/revenue/import', upload.single('file'), async (req: Request, re
 // GET /api/pricing
 apiRouter.get('/pricing', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const pricing = await getActivePricing();
+    const pricing = await getActivePricing(res.locals.userId);
     res.json({
       description: 'Model pricing in USD per 1,000 tokens',
-      models: pricing
+      ...pricing
     });
   } catch (err) {
     console.error('Error fetching pricing:', err);
@@ -220,8 +315,76 @@ apiRouter.get('/pricing', async (_req: Request, res: Response): Promise<void> =>
   }
 });
 
+apiRouter.get('/import-history', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    res.json(await getImportHistory(res.locals.userId));
+  } catch (err) {
+    console.error('Error fetching import history:', err);
+    res.status(500).json({ error: 'Failed to fetch import history.' });
+  }
+});
+
+apiRouter.post('/custom-rates', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rate = await createCustomRate(res.locals.userId, req.body ?? {});
+    res.status(201).json({ success: true, rate });
+  } catch (err) {
+    if (err instanceof PriceVersionInputError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof PriceVersionConflictError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    console.error('Error creating custom rate:', err);
+    res.status(500).json({ error: 'Failed to create custom rate.' });
+  }
+});
+
+apiRouter.put('/custom-rates', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = typeof req.body?.id === 'string' ? req.body.id : '';
+    const rate = await updateCustomRate(res.locals.userId, id, req.body ?? {});
+    if (!rate) {
+      res.status(404).json({ error: 'Custom rate not found.' });
+      return;
+    }
+    res.json({ success: true, rate });
+  } catch (err) {
+    if (err instanceof PriceVersionInputError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof PriceVersionConflictError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    console.error('Error updating custom rate:', err);
+    res.status(500).json({ error: 'Failed to update custom rate.' });
+  }
+});
+
+apiRouter.delete('/custom-rates', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = typeof req.body?.id === 'string' ? req.body.id : '';
+    if (!await deleteCustomRate(res.locals.userId, id)) {
+      res.status(404).json({ error: 'Custom rate not found.' });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    if (err instanceof PriceVersionInputError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error('Error deleting custom rate:', err);
+    res.status(500).json({ error: 'Failed to delete custom rate.' });
+  }
+});
+
 // POST /api/upload
-apiRouter.post('/upload', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+apiRouter.post('/upload', handleFileUpload, async (req: Request, res: Response): Promise<void> => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'No file uploaded. Please select a CSV or JSON file.' });
@@ -229,88 +392,92 @@ apiRouter.post('/upload', upload.single('file'), async (req: Request, res: Respo
     }
 
     const filename = req.file.originalname.toLowerCase();
+    if (!filename.endsWith('.csv') && !filename.endsWith('.json')) {
+      res.status(400).json({ error: 'Only CSV and JSON files are supported.' });
+      return;
+    }
     const content = req.file.buffer.toString('utf-8');
 
     let rawRows;
-    if (filename.endsWith('.json')) {
-      rawRows = parseJson(content);
-    } else {
-      rawRows = parseCsv(content);
-    }
-
-    if (!rawRows || rawRows.length === 0) {
-      res.status(400).json({ error: 'File is empty or could not be parsed.' });
+    try {
+      if (filename.endsWith('.json')) {
+        rawRows = parseJson(content);
+      } else {
+        rawRows = parseCsv(content);
+      }
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? `Could not parse uploaded data: ${err.message}` : 'Could not parse uploaded data.'
+      });
       return;
     }
 
-    const calculated = await processRawRecords(rawRows);
-    if (calculated.length === 0) {
-      res.status(400).json({ error: 'No valid usage records found. Ensure required columns exist.' });
-      return;
-    }
-
-    const userId = res.locals.userId;
-    const inserted = await saveRecords(calculated, userId);
-    const summary = await getOverallSummary(userId);
-    const unpricedRecords = calculated.filter(record => record.unpriced).length;
+    const result = await importUsageRecords(rawRows, res.locals.userId, {
+      sourceName: path.basename(req.file.originalname),
+      sourceType: 'upload'
+    });
 
     res.json({
       success: true,
-      message: `Successfully ingested ${inserted} records from '${req.file.originalname}'. ${unpricedRecords} records were unpriced.`,
-      insertedRecords: inserted,
-      unpricedRecords,
-      summary
+      message: `Imported ${result.insertedRecords} new records from '${path.basename(req.file.originalname)}'; skipped ${result.duplicateRecords} duplicates. ${result.unpricedRecords} new records were unpriced.`,
+      ...result
     });
   } catch (err) {
+    if (err instanceof UsageImportValidationError) {
+      res.status(400).json({ error: err.message, rejectedRows: err.rejectedRows });
+      return;
+    }
     console.error('Error uploading file:', err);
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to process uploaded file' });
+    res.status(500).json({ error: 'Failed to save uploaded usage records.' });
   }
 });
 
 // POST /api/paste
 apiRouter.post('/paste', async (req: Request<{}, {}, PastePayload>, res: Response): Promise<void> => {
   try {
-    const { content, format } = req.body;
-    if (!content || !content.trim()) {
+    const { content, format } = req.body ?? {};
+    if (typeof content !== 'string' || !content.trim()) {
       res.status(400).json({ error: 'Pasted content cannot be empty.' });
+      return;
+    }
+    if (Buffer.byteLength(content, 'utf8') > MAX_IMPORT_BYTES) {
+      res.status(413).json({ error: 'Pasted usage data must be 10 MB or smaller.' });
       return;
     }
 
     const trimmed = content.trim();
     let rawRows;
 
-    if (format === 'json' || trimmed.startsWith('[') || trimmed.startsWith('{')) {
-      rawRows = parseJson(trimmed);
-    } else {
-      rawRows = parseCsv(trimmed);
-    }
-
-    if (!rawRows || rawRows.length === 0) {
-      res.status(400).json({ error: 'Could not extract valid usage rows from pasted data.' });
+    try {
+      if (format === 'json' || trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        rawRows = parseJson(trimmed);
+      } else {
+        rawRows = parseCsv(trimmed);
+      }
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? `Could not parse pasted data: ${err.message}` : 'Could not parse pasted data.'
+      });
       return;
     }
 
-    const calculated = await processRawRecords(rawRows);
-    if (calculated.length === 0) {
-      res.status(400).json({ error: 'No valid records found with required fields.' });
-      return;
-    }
-
-    const userId = res.locals.userId;
-    const inserted = await saveRecords(calculated, userId);
-    const summary = await getOverallSummary(userId);
-    const unpricedRecords = calculated.filter(record => record.unpriced).length;
+    const result = await importUsageRecords(rawRows, res.locals.userId, {
+      sourceName: 'Pasted usage data',
+      sourceType: 'paste'
+    });
 
     res.json({
       success: true,
-      message: `Successfully ingested ${inserted} records. ${unpricedRecords} records were unpriced.`,
-      insertedRecords: inserted,
-      unpricedRecords,
-      summary
+      message: `Imported ${result.insertedRecords} new records; skipped ${result.duplicateRecords} duplicates. ${result.unpricedRecords} new records were unpriced.`,
+      ...result
     });
   } catch (err) {
+    if (err instanceof UsageImportValidationError) {
+      res.status(400).json({ error: err.message, rejectedRows: err.rejectedRows });
+      return;
+    }
     console.error('Error processing pasted data:', err);
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to process pasted data' });
+    res.status(500).json({ error: 'Failed to save pasted usage records.' });
   }
 });
 
@@ -339,20 +506,21 @@ apiRouter.post('/load-sample', async (req: Request, res: Response): Promise<void
 
     const content = fs.readFileSync(sampleFile, 'utf-8');
     const rawRows = parseCsv(content);
-    const calculated = await processRawRecords(rawRows);
-    const userId = res.locals.userId;
-    const inserted = await saveRecords(calculated, userId);
-    const summary = await getOverallSummary(userId);
-    const unpricedRecords = calculated.filter(record => record.unpriced).length;
+    const result = await importUsageRecords(rawRows, res.locals.userId, {
+      sourceName: 'Bundled sample usage',
+      sourceType: 'sample'
+    });
 
     res.json({
       success: true,
-      message: `Successfully loaded ${inserted} sample records. ${unpricedRecords} records were unpriced.`,
-      insertedRecords: inserted,
-      unpricedRecords,
-      summary
+      message: `Imported ${result.insertedRecords} new sample records; skipped ${result.duplicateRecords} duplicates. ${result.unpricedRecords} new records were unpriced.`,
+      ...result
     });
   } catch (err) {
+    if (err instanceof UsageImportValidationError) {
+      res.status(400).json({ error: err.message, rejectedRows: err.rejectedRows });
+      return;
+    }
     console.error('Error loading sample data:', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to load sample data' });
   }
@@ -363,7 +531,7 @@ apiRouter.post('/clear', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = res.locals.userId;
     await clearAllData(userId);
-    res.json({ success: true, message: 'All usage data cleared successfully.' });
+    res.json({ success: true, message: 'Your usage records, customer revenue, import history, and custom pricing rates were cleared.' });
   } catch (err) {
     console.error('Error clearing data:', err);
     res.status(500).json({ error: 'Failed to clear usage data' });

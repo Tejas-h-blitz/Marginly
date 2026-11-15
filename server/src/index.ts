@@ -3,8 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { apiRouter } from './routes/api.js';
+import { apiRouter, getAuthenticatedUserId } from './routes/api.js';
 import { prisma } from './db.js';
+import { ensurePricingSeeded } from './services/pricingService.js';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -23,9 +24,6 @@ app.use(cors({
   origin: [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
   credentials: true
 }));
-
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Clerk Authentication Middleware (if secret key configured)
 import { clerkMiddleware } from '@clerk/express';
@@ -52,8 +50,27 @@ if (
   console.warn('[Auth] Clerk keys are missing or invalid; all /api routes will return 401.');
 }
 
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // API Routes
 app.use('/api', apiRouter);
+
+app.use((err: { type?: string }, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if ((req.path === '/api' || req.path.startsWith('/api/')) && !getAuthenticatedUserId(req)) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+  if (err.type === 'entity.too.large') {
+    res.status(413).json({ error: 'Request data must be 10 MB or smaller.' });
+    return;
+  }
+  if (err.type === 'entity.parse.failed') {
+    res.status(400).json({ error: 'Request body contains invalid JSON.' });
+    return;
+  }
+  next(err);
+});
 
 // Healthcheck
 app.get('/health', (_req, res) => {
@@ -78,6 +95,7 @@ async function startServer() {
     throw new Error('[Security] FATAL: TEST_AUTH_SECRET cannot be enabled when NODE_ENV=production. Server refusing to start.');
   }
   await checkConnection();
+  await ensurePricingSeeded();
 
   server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n============================================================`);

@@ -119,11 +119,38 @@ for (const cid of other13) {
 addRow('cust_15', '2026-11-01T10:00:00Z', 'gpt-4o-mini', 500, 100);
 addRow('cust_18', '2026-11-02T10:00:00Z', 'gpt-4o-mini', 500, 100);
 
+// Regression baseline extension:
+// 44 priced October requests add exactly $9.97159 at the Gemini 2.5 Flash output rate.
+const octoberCustomers = [
+  'cust_01', 'cust_02', 'cust_03', 'cust_05', 'cust_06', 'cust_07', 'cust_08',
+  'cust_09', 'cust_10', 'cust_11', 'cust_12', 'cust_13', 'cust_14'
+];
+for (let i = 0; i < 44; i++) {
+  const day = 16 + Math.floor(i / octoberCustomers.length);
+  const customerId = octoberCustomers[i % octoberCustomers.length];
+  const outputTokens = i === 43 ? 90686 : 90650;
+  addRow(customerId, `2026-10-${String(day).padStart(2, '0')}T13:00:00Z`, 'gemini-2.5-flash', 0, outputTokens);
+}
+
+// Five October records remain unpriced and are excluded from cost totals.
+for (let i = 0; i < 5; i++) {
+  addRow(octoberCustomers[i], `2026-10-20T${String(10 + i).padStart(2, '0')}:00:00Z`, 'stress-unpriced-model', 1000, 500);
+}
+
+// Four November requests add exactly $0.02998 without changing earlier monthly totals.
+for (let i = 0; i < 3; i++) {
+  addRow(octoberCustomers[i], `2026-11-03T${String(10 + i).padStart(2, '0')}:00:00Z`, 'gpt-4o', 1000, 500);
+}
+addRow(octoberCustomers[3], '2026-11-04T10:00:00Z', 'gpt-4o', 0, 748);
+
 // Generate CSV
 const headers = 'customer_id,timestamp,model_name,input_tokens,output_tokens\n';
 const csvContent = headers + rows.map(r => `${r.customer_id},${r.timestamp},${r.model_name},${r.input_tokens},${r.output_tokens}`).join('\n') + '\n';
 
+if (rows.length !== 126) {
+  throw new Error(`Stress fixture must contain 126 data rows, got ${rows.length}.`);
+}
+
 fs.writeFileSync(path.resolve('data/marginly_stress_test.csv'), csvContent);
 fs.writeFileSync(path.resolve('marginly_stress_test.csv'), csvContent);
 console.log(`Generated stress test CSV with ${rows.length} rows and ${new Set(rows.map(r => r.customer_id)).size} unique customers.`);
-

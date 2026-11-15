@@ -1,160 +1,207 @@
 # Marginly — Product & Architecture Specification
 
-> **Status:** Current implementation, reviewed November 6, 2026. This document distinguishes working application behavior from static previews and future work.
+> **Status:** Implementation-aligned product and architecture reference. Verify deployment-specific privacy and terms details before publication.
 
-## 1. Product summary
+---
 
-Marginly is an import-based LLM usage cost dashboard for SaaS teams. It groups usage records by customer, estimates spend from input/output token counts and the active model pricing catalog, and helps identify accounts responsible for a large share of priced spend.
+## 1. Product Summary
 
-The product currently analyzes uploaded or pasted data. It does not collect usage directly from OpenAI, Anthropic, Google, or an observability gateway.
+**Marginly** is a specialized unit-economics and LLM cost-tracking dashboard for SaaS engineering and finance teams. It bridges the gap between raw LLM token consumption and business gross margins by:
 
-## 2. Current application
+1. Ingesting customer-level usage logs (CSV or JSON) exported from AI gateways or provider dashboards (OpenAI, Anthropic, Google Gemini, OpenRouter, Helicone, LiteLLM, or custom proxies).
+2. Normalizing model identifiers and calculating exact expenditure dynamically using an active multi-provider pricing catalog.
+3. Correlating token expenditure against customer recurring contract revenue to reveal customer-level gross margins, identify spend concentration, and flag unprofitable ("negative-margin") accounts.
 
-### Public landing page
+Marginly operates on an **import-based ingestion model**; it does not require direct runtime API proxying or invasive webhook integrations into production LLM inference pipelines.
 
-The public landing page is a responsive, theme-aware product overview. Its sections appear in this order:
+---
 
-1. **Hero:** Explains customer-level LLM token cost analysis, with a primary upload CTA, a link to “How it works,” and a “Free during early access” badge. The primary CTA opens the dashboard for signed-in users or the sign-up flow for signed-out users.
-2. **How it works:** Describes exporting usage, uploading or pasting it, and reviewing cost and margin. It includes the accepted usage CSV column example and a downloadable template.
-3. **Product preview:** Shows static sample dashboard data, a customer breakdown, an unpriced-model warning, and a cost chart. Its highest-spend example bar uses a dark-blue highlight.
-4. **What you get:** Summarizes customer cost, spend share, spend concentration, unpriced-model visibility, monthly margin, and CSV export.
-5. **Supported models:** Lists the built-in model catalog rates by provider, with separate input/output text-token prices.
-6. **Your data:** Describes stored usage fields, clarifies that prompts and responses are not stored as usage records, and recommends anonymized customer IDs.
-7. **Final CTA and footer:** Provides the upload CTA, early-access badge, and real in-page links.
+## 2. Complete Technology Stack
 
-The sticky landing navbar has three centered section links (“How it works,” “Features,” and “Models”), the theme-aware Marginly logo, a theme toggle, and a sign-in or dashboard action. Authenticated users also see their Clerk profile control. The navbar uses an inset, rounded glass treatment over the landing background. The footer also uses the theme-aware brand logo.
+### Frontend Architecture
+- **Framework & Language:** React 18.3 (`react`, `react-dom`), TypeScript 5.6
+- **Build System & Bundler:** Vite 5.4 with `@vitejs/plugin-react`
+- **Styling & Design System:** Tailwind CSS 3.4 with custom typography, dark/light theme support, PostCSS, Autoprefixer, and custom cubic-bezier micro-interactions
+- **Authentication Client:** `@clerk/clerk-react` (v5.61) and `@clerk/themes` for themed modal authentication
+- **Data Visualization & Charts:** Recharts 2.12 (responsive SVG bar charts with custom tooltips and spend concentration highlights)
+- **Icons & UI Micro-components:** Inline SVG icons, responsive slide-over drawers, custom modals, and accessible focus management
 
-The hero uses a balanced, responsive headline aligned with its supporting copy, a primary upload button, a “See how it works” link, and an early-access badge. It also contains a small interactive margin calculator labeled “Illustrative example, not your data.” The calculator uses the shared built-in pricing catalog and an even split of input/output tokens for its estimate. Its values are illustrative only and are not connected to imported account data or provider APIs. The product preview also uses static sample figures and does not represent a live customer account or dashboard query.
+### Backend Architecture
+- **Runtime & Language:** Node.js (v20+ / v22), Express 4.21, TypeScript 5.6
+- **Development Execution:** `tsx` for TypeScript execution and hot-reloading
+- **Authentication Middleware:** `@clerk/express` (v2.1) verifying session tokens against Clerk's JWKS
+- **File & Data Parsing:** `multer` in-memory multipart upload and `csv-parse` for CSV processing; request and file payloads are capped at 10 MiB
+- **CORS & Utilities:** `cors`, `dotenv`
 
-The supported-model list and calculator use the same built-in catalog as the server fallback catalog; they do not fetch a user's database-specific pricing rows. A “Give feedback” mail link appears in the final CTA and footer only when `VITE_FEEDBACK_EMAIL` is configured. The landing page does not include an FAQ section, pricing tiers, testimonials, customer logos, or claims of live ingestion.
+### Database & Storage
+- **ORM & Schema Engine:** Prisma ORM 5.22 (`@prisma/client`, `prisma`)
+- **Primary Database:** PostgreSQL 14+ via standard connection pooling (`DATABASE_URL`)
+- **Embedded Developer Engine:** `@electric-sql/pglite` (v0.5.8), used as a zero-dependency local PostgreSQL-compatible fallback with automatic application of the project's SQL migrations
 
-### Authenticated dashboard
+### Quality, Security & Testing Tooling
+- **Auth & JWT Security Suite:** `test-auth-security.mjs` (13-point security verification suite enforcing token validity, tamper prevention, and environment guards)
+- **End-to-End Test Harness:** `test-e2e.mjs` (validates end-to-end user workflows, file imports, revenue updates, and export fidelity)
+- **Stress & UTC Date Suite:** `test-stress-utc.mjs` and `test-stress-worker.mjs` (verifies UTC calendar-month boundary calculations and high-volume dataset parsing)
 
-After sign-in, a user can:
+---
 
-- Import a CSV or paste CSV/JSON usage rows, and import customer revenue from a CSV.
-- Load the bundled sample CSV into their own account.
-- Select a month or All time, then review cost and token summaries, a customer spend chart, and a customer table.
-- Set each customer's monthly revenue inline or provide it through a revenue CSV.
-- View the active model pricing catalog.
-- Export the customer breakdown as CSV or clear their own imported usage data.
+## 3. Product Features & User Experience
 
-For a selected month, the dashboard includes:
+### 3.1 Public Landing Page
+The landing page provides a theme-aware, responsive product overview with zero mock data clutter:
+1. **Sticky Header:** Theme toggle (dark/light), brand logo, section anchors (*How it works*, *Features*, *Models*), and an authentication entry point (Sign In / Open Dashboard).
+2. **Hero Section:** Headline explaining customer unit economics, primary CTA button, early-access badge, and an interactive illustrative margin calculator demonstrating how token counts and contract prices determine gross margin.
+3. **How It Works:** 3-step breakdown detailing log export, drag-and-drop ingestion, and automated unit-economics analysis.
+4. **Product Showcase:** Live component preview displaying static sample data across KPI summary cards, a data quality alert strip, a customer cost distribution chart, and a sample customer table.
+5. **What You Get:** Feature cards covering spend share, spend concentration risk, unpriced model visibility, and instant CSV exports.
+6. **Model Rate Ticker & Catalog:** Up-to-date pricing table listing input and output rates across leading providers (OpenAI, Anthropic, Google).
+7. **Your Data & Privacy Section:** Describes stored fields, in-memory import processing, tenant isolation, and recommendations for anonymized customer IDs.
+8. **Footer:** Navigation links, feedback, and draft Privacy and Terms notices marked for legal review.
 
-- Total revenue, total priced cost, blended margin percentage, unprofitable customer count, active account count, token volume, and average cost per priced request.
-- Per-customer margin and margin percentage; negative-margin customers are highlighted. Customers without revenue are omitted from margin totals.
-- Warnings for unpriced models (which make displayed margins overstate actual margins) and records with missing or invalid timestamps.
+### 3.2 Slide-Over Import Drawer (`ImportDrawer.tsx` & `ImportSection.tsx`)
+A right-side slide-over modal designed for high-clarity data ingestion:
+- **Pinned Header:** Clean title (*Upload Usage Logs*) and description flush with the left boundary, with close button (`×`) and full ESC/backdrop keyboard handling.
+- **Segmented 3-Way Tab Switcher:**
+  1. **Upload File:** Drag-and-drop dropzone supporting CSV and JSON up to 10 MiB, with browser-side checks and authoritative server-side row validation.
+  2. **Paste Text:** Raw monospace text area with format toggle (CSV/JSON), sample row insertion, and immediate parsing.
+  3. **Revenue CSV:** Dedicated uploader for importing customer revenue versions, optionally scoped by `effective_month`.
+- **Structured Schema Reference Cards:** Compact 2x2 specification grids detailing expected column names (`customer_id`, `model_name`, `input_tokens`, `output_tokens`, `timestamp`), field requirements (`REQ` vs `OPT`), and one-click template download links.
+- **Validation & Error Feedback:** The server validates each row and rejects an invalid batch without partial writes. Errors identify rejected row numbers.
+- **Privacy Disclosure:** Upload bytes are transmitted to the service and parsed in memory. Marginly persists supported usage fields, revenue, import metadata, and custom rates, not prompt or completion text. Users are told not to include unneeded content.
+- **Anchored Demo Action:** Bottom-pinned action enabling users to explore the dashboard instantly with 8 preloaded customer accounts.
 
-All time shows costs only. Revenue and margin comparisons require a selected month.
+### 3.3 Authenticated Dashboard
+The core application workspace for analyzing customer LLM expenditure:
+- **Month & Timeframe Filter:** Switch between specific UTC calendar months (e.g., `2026-10`) and `All time`.
+- **KPI Summary Grid (`KpiGrid.tsx`):**
+  - *Monthly View:* Total Revenue, Total Priced Cost, Blended Margin %, Unprofitable Customers count, Active Accounts, Token Volume (Input vs. Output), and Average Cost per Priced Request.
+  - *All-Time View:* Cumulative LLM Cost, Top Spend Customer, Active Accounts, Token Volume, and Average Cost per Request.
+- **Data Quality & Warning Strip (`DataQualityStrip.tsx`):**
+  - Highlights unpriced models that require catalog rate mapping (preventing margin overstatement).
+  - Flags untimestamped requests excluded from specific monthly calculations.
+- **Spend Concentration Alert:** Flags when the top 3 customers account for ≥70% of total priced LLM spend (active when tracking 8 or more customers).
+- **Cost Distribution Chart (`CostChart.tsx`):** Horizontal bar chart ranking top accounts by gross spend with custom tooltips detailing token volume and bill share.
+- **Customer Expenditure Table (`CustomerTable.tsx`):**
+  - Full account breakdown with sorting on Cost, Tokens, Requests, and Customer ID.
+  - Spend-share progress indicators and search/filter by customer ID.
+  - Quick-copy button for customer identifiers with temporary visual confirmation.
+  - Inline monthly revenue editing with immediate margin recalculation.
+  - Highlighting of negative-margin accounts (spend exceeds contract revenue).
+- **Customer Details & Merge:** Customer-level model and request details, revenue history, recent usage, and a transactional merge flow. Duplicate usage rows collapse; target revenue wins same-month conflicts.
+- **Model Pricing Dialog (`PricingModal.tsx`):** Shows active and upcoming global prices, account-specific effective-dated rates, and supports custom-rate add/edit/delete in USD per million tokens.
+- **Export & Maintenance Actions:**
+  - One-click CSV export of customer margins with the pricing basis disclosed.
+  - Account-scoped clear action removes usage, customers/revenue, import history, and custom rates atomically.
 
-Other dashboard features:
+---
 
-- Cost-only totals, top customer, active account count, token volume, and average cost per priced request in All time.
-- A top-three spend concentration indicator when there are at least eight customers; it flags a concentration risk at 70% or more of priced spend.
-- An unpriced-model warning listing unrecognized model names and request counts.
-- Unpriced-model and margin-overstatement notices use a dark-blue visual treatment; the warning meaning and cost-exclusion behavior are unchanged.
-- A chart of up to eight customers.
-- A customer table with search, sorting, spend-share filters, customer ID copying, and inline monthly revenue editing.
+## 4. Ingestion, Model Resolution & Margin Calculation
 
-The dashboard navigation uses the theme-aware Marginly logo in a rounded glass panel and retains its existing theme, account, and action controls without the former “SaaS Instrument” label. The dashboard chart retains its amber highlight for the highest-spend customer. The static landing preview uses a dark-blue highlight instead; this is a presentation difference and does not affect chart data or dashboard behavior.
+### 4.1 Accepted Schema & Aliases
+Each usage row requires a customer ID, model identifier, and non-negative whole-number input/output token counts. Timestamps are optional; when supplied they must be valid. Accepted aliases include:
+- **Customer ID:** `customer_id`, `customerid`, `customer`, `user_id`, `client_id` (Required)
+- **Model Name:** `model_name`, `model`, `engine` (Required)
+- **Input Tokens:** `input_tokens`, `prompt_tokens`, `tokens_in`, `input` (Required)
+- **Output Tokens:** `output_tokens`, `completion_tokens`, `tokens_out`, `output` (Required)
+- **Timestamp:** `timestamp`, `created_at`, `date`, `time` (Optional; ISO 8601 UTC string)
 
-## 3. Authentication and data access
+### 4.2 Dynamic Query-Time Cost Calculation
+- Token counts are stored as raw integers (`input_tokens`, `output_tokens`).
+- Dollar costs are **not** persisted as static numbers in usage rows. They are calculated at query time from token counts and the effective-dated `PriceVersion` rate:
+  $$\text{Record Cost} = \left(\frac{\text{input\_tokens}}{1000} \times \text{costPer1kInput}\right) + \left(\frac{\text{output\_tokens}}{1000} \times \text{costPer1kOutput}\right)$$
+- Account-specific rates take precedence over global catalog rates. A model without an effective rate yields a null cost, is excluded from cost totals, and appears in the dashboard's unpriced-model warning with a request count.
+- Existing records are recalculated on query when pricing versions change. Version history records effective dates; price changes are not retroactively applied before their effective date.
+- Untimestamped usage is costed using the rate effective at query time and appears only in the all-time period view.
 
-- Clerk provides the frontend sign-in/sign-up flow and verified server sessions.
-- Every `/api/*` endpoint requires a Clerk-authenticated `userId`; missing or invalid authentication is rejected with HTTP 401. `/health` is public.
-- If valid Clerk server keys are not configured, API access remains unavailable and returns 401. There is no demo identity or `demo-user` fallback.
-- Customer and usage records are scoped to the authenticated Clerk user in application queries and writes.
-- The sample-data endpoint is protected by the same authentication and adds sample rows to the signed-in user's account.
-- There is no workspace or team selector; all records remain scoped to the signed-in user.
+### 4.3 Margin & Unit Economics Formulations
+For any customer $i$ in a selected month:
+- $\text{Priced Cost}_i = \sum \text{Record Cost}$ (for all recognized models in that month)
+- $\text{Margin}_i = \text{Monthly Revenue}_i - \text{Priced Cost}_i$
+- $\text{Margin \%}_i = \frac{\text{Margin}_i}{\text{Monthly Revenue}_i} \times 100$
+- **Blended Margin %:** Calculated across all customers who have revenue entered:
+  $$\text{Blended Margin \%} = \frac{\sum (\text{Revenue}_i - \text{Priced Cost}_i)}{\sum \text{Revenue}_i} \times 100$$
+- Revenue is effective-month versioned. A later version applies from its effective month until another version supersedes it; setting a null version clears revenue from that month forward without deleting earlier history.
+- Accounts without revenue entered are displayed with null margin and excluded from blended margin totals to avoid distorting aggregate business margins.
 
-The API currently exposes:
+---
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Public health response |
-| `GET` | `/api/summary?month=YYYY-MM\|all` | User-scoped monthly or all-time totals, available months, and unpriced-model counts |
-| `GET` | `/api/customers?month=YYYY-MM\|all` | User-scoped customer cost and (for a month) margin breakdown |
-| `PUT` | `/api/customers/:customerId/revenue` | Set or clear a user's monthly revenue for an owned customer |
-| `POST` | `/api/revenue/import` | Import customer monthly revenue from CSV |
-| `GET` | `/api/pricing` | Active model pricing catalog |
-| `POST` | `/api/upload` | Upload and import CSV or JSON file data |
-| `POST` | `/api/paste` | Import pasted CSV or JSON data |
-| `POST` | `/api/load-sample` | Import bundled sample data for the signed-in user |
-| `POST` | `/api/clear` | Delete the signed-in user's usage and customer rows |
-| `GET` | `/api/export?month=YYYY-MM\|all` | Download the signed-in user's customer breakdown as CSV |
+## 5. Security & Multi-Tenant Architecture
 
-## 4. Import and pricing behavior
+1. **Strict User Scoping (Tenant Isolation):**
+   - Every API request is authenticated via Clerk JWT session verification.
+   - Every `/api` route except `/health` requires a verified Clerk user ID. Test-only signed tokens are accepted only in `NODE_ENV=test` with an explicit `TEST_AUTH_SECRET`.
+   - All reads and writes are scoped to that verified user. Custom pricing, import history, customer detail, merges, and clear operations also enforce tenant ownership.
+2. **Production Startup Security Guard:**
+   - The backend includes a hard startup check: if `TEST_AUTH_SECRET` is detected while `NODE_ENV === 'production'`, the server refuses to boot and immediately exits (`process.exit(1)`).
+3. **Automated Security Verification:**
+   - Verified via `test-auth-security.mjs` against 13 security invariants, including:
+     - Immediate rejection of unauthenticated requests (HTTP 401).
+     - Immediate rejection of hand-forged tokens, altered sub claims, and invalid HMAC/RSA signatures.
+     - Immediate rejection of expired tokens.
+     - Strict isolation of test bypass tokens to `NODE_ENV=test`.
+4. **Data Privacy & Draft Policy:**
+   - Import payloads are transmitted to the service and processed in memory; supported usage fields, revenue, import metadata, and account-specific pricing rates are persisted, not prompt/completion text.
+   - The landing page includes Privacy and Terms drafts marked for legal review. Hosting providers, processing regions, retention details, jurisdiction, and operator contact information must be confirmed before publication.
+   - Users are encouraged to provide pseudonymous customer IDs (e.g., `cust_92a1`).
 
-### Accepted usage data
+---
 
-CSV uploads and pasted content, or JSON arrays of objects, are supported. Recognized fields include customer ID, timestamp, model name, input token count, and output token count, with common provider-specific aliases. Customer ID is required; timestamps may be absent or invalid. Token values are parsed as non-negative integer counts.
+## 6. API Route Catalog
 
-### Model resolution and cost
+All routes except `/health` require an `Authorization: Bearer <clerk_token>` header.
 
-- Model names are matched against the active pricing catalog after normalization, including supported provider/resource prefixes and version/date suffixes.
-- Rates are USD per 1,000 text input and output tokens. Image, audio, video, and other modality-specific charges are outside the current calculation.
-- The active catalog comes from database pricing rows when present; when the database pricing table is empty, the built-in catalog is used.
-- Records whose model cannot be resolved are unpriced. They do not contribute to cost totals; the dashboard lists each model and its request count. Import responses report the number of unpriced records in that import.
-- Only token counts, model names, customer IDs, and timestamps are persisted for usage records. Cost is recalculated at query time from the current pricing catalog. Adding a rate for a previously unpriced model can therefore make existing records priced in subsequent queries.
-- Historical rates are not versioned. Changing a model's current rate changes the recalculated cost for past records. Effective-date pricing is a future requirement for accurate historical billing.
-- Revenue CSVs require `customer_id,monthly_revenue_usd`; customer IDs must already belong to the authenticated user. Revenue is non-negative, accepts up to two decimal places, and is stored once per customer (not versioned by month).
-- The import drawer provides usage and revenue CSV templates and advises using anonymized customer IDs rather than emails or names.
+| Method | Path | Description | Access |
+|---|---|---|---|
+| `GET` | `/health` | Server status and ISO timestamp | Public |
+| `GET` | `/api/summary` | Query aggregate metrics, available months, and unpriced models (`?month=YYYY-MM\|all`) | Authenticated |
+| `GET` | `/api/customers` | Query customer breakdown, token counts, costs, and margins (`?month=YYYY-MM\|all`) | Authenticated |
+| `GET` | `/api/customers/:customerId/detail` | Query customer usage details and revenue history | Authenticated |
+| `POST` | `/api/customers/merge` | Transactionally merge an owned source customer into an owned target | Authenticated |
+| `PUT` | `/api/customers/:customerId/revenue` | Create or update an effective-month revenue version | Authenticated |
+| `POST` | `/api/revenue/import` | Bulk import customer monthly revenue versions from CSV | Authenticated |
+| `GET` | `/api/pricing` | Retrieve active, upcoming, and custom pricing rates | Authenticated |
+| `POST`, `PUT`, `DELETE` | `/api/custom-rates` | Create, update, and delete account-specific effective-dated rates | Authenticated |
+| `GET` | `/api/import-history` | Retrieve account-scoped import batches | Authenticated |
+| `POST` | `/api/upload` | Upload and ingest usage log files (multipart CSV / JSON) | Authenticated |
+| `POST` | `/api/paste` | Ingest raw pasted CSV text or JSON array payload | Authenticated |
+| `POST` | `/api/load-sample` | Seed authenticated user's account with realistic sample customer usage | Authenticated |
+| `POST` | `/api/clear` | Atomically purge the account's usage, customer/revenue, import history, and custom rates | Authenticated |
+| `GET` | `/api/export` | Download complete customer margin breakdown as CSV (`?month=YYYY-MM\|all`) | Authenticated |
 
-## 5. Analytics and export details
+---
 
-- Customer totals include all requests and tokens. Costs include only records with a recognized active price.
-- Average cost per request uses priced requests as its denominator.
-- Customer spend percentages use total priced cost.
-- Month filtering uses UTC calendar-month boundaries. Records with missing or invalid timestamps are included only in All time; their count is reported separately.
-- For a month, margin is monthly revenue minus priced cost, and margin percentage is margin divided by revenue. Customers without revenue are excluded from margin totals. Unpriced records are excluded from cost, so their presence means actual margin may be lower than shown.
-- All-time exports leave monthly margin and margin-percentage cells blank.
-- The concentration indicator considers the top three customers and appears only when there are at least eight customers; its threshold is 70%.
-- CSV export columns are:
+## 7. Database Schema (`server/prisma/schema.prisma`)
 
-  `customer_id,total_requests,priced_requests,total_input_tokens,total_output_tokens,total_tokens,monthly_revenue_usd,total_cost_usd,margin_usd,margin_percent,avg_cost_per_request_usd,percent_of_total_cost`
+- `Customer`: unique per user and external customer ID; owns usage records.
+- `UsageRecord`: user/customer, optional timestamp, model name, raw input/output token counts, and import fingerprint. Dollar cost is not stored.
+- `ModelPricing`: shared model display/provider metadata. Pricing rates are stored separately.
+- `PriceVersion`: effective-dated global (`__global__`) and user-specific rates, unique by owner/model/effective date.
+- `ImportBatch`: per-user import source, record counts, unpriced count, and creation time.
+- `RevenueVersion`: per-user/customer revenue versions by effective month; null versions represent explicit clearing.
 
-## 6. Architecture and deployment
+The additive migrations are in `server/prisma/migrations/`. Local PGlite applies them at startup; external PostgreSQL deployments must apply them before deploying the corresponding server code.
 
-| Area | Implementation |
-|---|---|
-| Frontend | React, TypeScript, Vite, Tailwind CSS, Recharts |
-| Backend | Node.js, Express, TypeScript |
-| Authentication | Clerk React and Express SDKs |
-| Data access | Prisma Client and a PostgreSQL-compatible PGlite fallback |
-| Schema | `server/prisma/schema.prisma` |
-| Production serving | Express serves the built client from `client/dist` when present |
+---
 
-The root `npm run build` command builds the client, generates the Prisma client, then compiles the server. `npm start` starts the server on port 3001 by default. Configure Clerk client/server keys and `DATABASE_URL`; production startup fails if `DATABASE_URL` is missing or unreachable, and embedded PGlite is development-only.
+## 8. Development & Build Lifecycle
 
-When using the embedded PGlite fallback, its data directory is `dev-postgres-data`. External PostgreSQL deployments must have the current schema/migrations applied; the embedded fallback migration behavior is not a substitute for deploying migrations to a hosted database.
+### Available Scripts (Root `package.json`)
+- `npm run dev:client` — Launches Vite development server on `http://localhost:5173`.
+- `npm run dev:server` — Launches Express API backend with `tsx watch` on `http://localhost:3001`.
+- `npm run build` — Compiles production client (`tsc && vite build`), generates Prisma client, and compiles backend TypeScript.
+- `npm start` — Boots production Express server (serves compiled client from `client/dist` and API endpoints on port 3001).
+- `npm run test:security` — Executes the 13-point automated auth & JWT security test suite.
+- `npm run test:e2e` — Runs the existing end-to-end user workflow test suite.
+- `npm run test:pricing` — Checks effective-date boundaries, custom-rate ownership/conversion, recalculation, and CSV cost basis.
+- `npm run test:imports` — Checks all-route unauthenticated responses, atomic imports, duplicate handling, limits, and scoped clearing.
+- `npm run test:revenue` — Checks effective-month revenue, imports, and isolation.
+- `npm run test:customers` — Checks detail/merge ownership, duplicate collapse, target-wins revenue, and transaction rollback.
+- `npm run test:stress` — Runs 35 UTC-boundary and regression checks in each of four time zones.
 
-## 7. Data model
+Use an isolated PGlite copy for database tests by setting `MARGINLY_TEST_PGLITE_DIR` while `NODE_ENV=test`; never point tests at production or the active developer database.
 
-The active Prisma schema defines:
+---
 
-- **Customer:** user ID, customer ID, nullable monthly revenue in USD, timestamps; unique per `(userId, customerId)`.
-- **UsageRecord:** user ID, customer ID, optional event timestamp, original model name, input tokens, output tokens.
-- **ModelPricing:** model key, display name, provider, input and output rates.
+## 9. Current Status & Verification
 
-Usage costs and total-token values are derived, not stored. The November 2026 migration removes legacy persisted cost/token-total columns and synthetic user-ID defaults.
-
-## 8. Not implemented
-
-Marginly is an early functional MVP, not a production-scale or enterprise-ready SaaS product. The presence of a unified deployment, polished UI, and Clerk authentication should not be read as evidence of operational readiness or compliance.
-
-- Real-time ingestion, provider API connections, or integrations with Langfuse/Helicone.
-- Stripe checkout, subscription enforcement, or billing administration.
-- Team accounts, invitations, roles, or shared workspaces.
-- PostgreSQL row-level security policies. Tenant separation is currently enforced by application-level user scoping.
-- Slack, email, or other outbound alerts.
-- Effective-date pricing or historical price snapshots.
-- A dashboard UI for editing pricing. The pricing dialog is read-only; the server can use seeded or database-configured rates.
-- Production readiness claims such as SOC 2 certification, SAML, or multi-region failover.
-
-## 9. Verification status
-
-For the November 3, 2026 hardening pass, the root production build completed successfully: client TypeScript/Vite build, Prisma Client generation, and server TypeScript compilation. An unauthenticated route check returned HTTP 401 for all eight `/api` endpoints and HTTP 200 for `/health`.
-
-The November 5–6, 2026 landing-page and dashboard presentation updates passed the client TypeScript check and Vite production build.
-
-These checks verify compilation and the tested authentication boundary; they do not constitute a full production deployment, external database migration, load test, or security certification.
+The project build runs the client TypeScript/Vite production build, generates Prisma Client, and compiles the server. Focused regression scripts cover pricing versions, imports, revenue history, customer merge/detail, authentication, and multi-time-zone UTC boundaries. Update this section with exact run results before each release; the Privacy and Terms drafts require deployment-specific completion and legal review.

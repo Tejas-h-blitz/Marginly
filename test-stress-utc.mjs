@@ -46,29 +46,25 @@ function stripColorsAndTimestamps(str) {
 async function main() {
   console.log('Starting Marginly UTC & Multi-Timezone Stress Test Suite...\n');
 
-  // Run 1: America/Los_Angeles
-  const resLA = await runWorkerWithTz('America/Los_Angeles');
-  process.stdout.write(resLA.stdout);
-  if (resLA.stderr) process.stderr.write(resLA.stderr);
+  const timezones = ['UTC', 'America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Auckland'];
+  const results = [];
+  for (const timezone of timezones) {
+    const result = await runWorkerWithTz(timezone);
+    results.push(result);
+    process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+  }
 
-  // Run 2: Asia/Kolkata
-  const resKolkata = await runWorkerWithTz('Asia/Kolkata');
-  process.stdout.write(resKolkata.stdout);
-  if (resKolkata.stderr) process.stderr.write(resKolkata.stderr);
-
-  if (resLA.code !== 0 || resKolkata.code !== 0) {
+  if (results.some(result => result.code !== 0)) {
     console.error('\nTests failed in one or more timezones.');
     process.exit(1);
   }
 
-  // Compare normalized outputs
-  const normLA = stripColorsAndTimestamps(resLA.stdout);
-  const normKolkata = stripColorsAndTimestamps(resKolkata.stdout);
-
   console.log('\n====================================================');
   console.log('Timezone Comparison Verification:');
-  if (normLA === normKolkata) {
-    console.log('✓ PASS: Results between TZ=America/Los_Angeles and TZ=Asia/Kolkata are IDENTICAL.');
+  const normalizedResults = results.map(result => stripColorsAndTimestamps(result.stdout));
+  if (normalizedResults.every(result => result === normalizedResults[0])) {
+    console.log(`✓ PASS: Results are identical under TZ=${timezones.join(', ')}.`);
   } else {
     console.error('✗ FAIL: Discrepancy detected between timezones!');
     process.exit(1);
@@ -80,4 +76,3 @@ main().catch(err => {
   console.error('Error running timezone tests:', err);
   process.exit(1);
 });
-
